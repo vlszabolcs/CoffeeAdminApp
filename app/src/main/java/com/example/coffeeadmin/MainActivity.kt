@@ -21,6 +21,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
@@ -31,7 +32,7 @@ import androidx.compose.ui.zIndex
 import com.example.coffeeadmin.ui.theme.CoffeeAdminTheme
 
 enum class AdminScreen {
-    LIST, SEARCH
+    LIST, SEARCH, MACHINE
 }
 
 class MainActivity : ComponentActivity() {
@@ -111,6 +112,12 @@ class MainActivity : ComponentActivity() {
                                             icon = { Icon(Icons.Default.List, contentDescription = "Lista") },
                                             label = { Text("Lista") }
                                         )
+                                        NavigationBarItem(
+                                            selected = currentScreen == AdminScreen.MACHINE,
+                                            onClick = { currentScreen = AdminScreen.MACHINE },
+                                            icon = { Icon(Icons.Default.Settings, contentDescription = "Gép") },
+                                            label = { Text("Gép") }
+                                        )
                                     }
                                 }
                             ) { innerPadding ->
@@ -120,6 +127,10 @@ class MainActivity : ComponentActivity() {
                                         modifier = Modifier.padding(innerPadding)
                                     )
                                     AdminScreen.SEARCH -> UserSearchScreen(
+                                        viewModel = viewModel,
+                                        modifier = Modifier.padding(innerPadding)
+                                    )
+                                    AdminScreen.MACHINE -> MachineScreen(
                                         viewModel = viewModel,
                                         modifier = Modifier.padding(innerPadding)
                                     )
@@ -273,6 +284,7 @@ fun LoginScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
     var password by remember { mutableStateOf("") }
     val isLoading by viewModel.isLoading
     val error by viewModel.error
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     Column(
         modifier = modifier
@@ -290,7 +302,7 @@ fun LoginScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
             onValueChange = { email = it },
             label = { Text("Email") },
             modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next)
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -301,7 +313,11 @@ fun LoginScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
             label = { Text("Jelszó") },
             modifier = Modifier.fillMaxWidth(),
             visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = {
+                viewModel.login(email, password)
+                keyboardController?.hide()
+            })
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -310,7 +326,10 @@ fun LoginScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
             CircularProgressIndicator()
         } else {
             Button(
-                onClick = { viewModel.login(email, password) },
+                onClick = {
+                    viewModel.login(email, password)
+                    keyboardController?.hide()
+                },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Bejelentkezés")
@@ -363,6 +382,7 @@ fun UserListContent(
     var showEditDialog by remember { mutableStateOf(false) }
     var userToEdit by remember { mutableStateOf<User?>(null) }
     var expandedUserId by remember { mutableStateOf<String?>(null) }
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     Column(modifier = modifier.padding(16.dp)) {
         Row(
@@ -391,13 +411,18 @@ fun UserListContent(
                     }
                 }
             },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { keyboardController?.hide() }),
             singleLine = true
         )
 
         Spacer(modifier = Modifier.height(8.dp))
 
         Button(
-            onClick = onRefresh,
+            onClick = {
+                onRefresh()
+                keyboardController?.hide()
+            },
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Lista Frissítése")
@@ -493,6 +518,7 @@ fun UserSearchScreen(
     var showEditDialog by remember { mutableStateOf(false) }
     var userToEdit by remember { mutableStateOf<User?>(null) }
     var manualUidSearch by remember { mutableStateOf("") }
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     Column(modifier = modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(
@@ -518,9 +544,13 @@ fun UserSearchScreen(
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = {
                 viewModel.searchUserByUid(manualUidSearch)
+                keyboardController?.hide()
             }),
             trailingIcon = {
-                IconButton(onClick = { viewModel.searchUserByUid(manualUidSearch) }) {
+                IconButton(onClick = {
+                    viewModel.searchUserByUid(manualUidSearch)
+                    keyboardController?.hide()
+                }) {
                     Icon(Icons.Default.Search, contentDescription = "Keresés")
                 }
             },
@@ -603,12 +633,81 @@ fun UserSearchScreen(
 }
 
 @Composable
+fun MachineScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
+    val config by viewModel.machineConfig
+    var priceText by remember(config.price) { mutableStateOf(config.price.toString()) }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    Column(
+        modifier = modifier.fillMaxSize().padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text = "Gép Beállítások", style = MaterialTheme.typography.headlineSmall)
+            Spacer(modifier = Modifier.weight(1f))
+            Button(onClick = { viewModel.logout() }) {
+                Text("Kilépés")
+            }
+        }
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = "Ingyenes mód", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                    Switch(
+                        checked = config.free,
+                        onCheckedChange = { viewModel.updateMachineConfig(config.copy(free = it)) }
+                    )
+                }
+                
+                HorizontalDivider()
+                
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(text = "Ár (Kredit)", style = MaterialTheme.typography.titleMedium)
+                    OutlinedTextField(
+                        value = priceText,
+                        onValueChange = { priceText = it },
+                        label = { Text("Egységár") },
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = {
+                            priceText.toIntOrNull()?.let { 
+                                viewModel.updateMachineConfig(config.copy(price = it))
+                            }
+                            keyboardController?.hide()
+                        }),
+                        singleLine = true
+                    )
+                    
+                    Button(
+                        onClick = { 
+                            priceText.toIntOrNull()?.let { 
+                                viewModel.updateMachineConfig(config.copy(price = it))
+                            }
+                            keyboardController?.hide()
+                        },
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Text("Mentés")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun UserDetailCard(
     user: User,
     onEditClick: () -> Unit,
     onUpdateCredit: (Int) -> Unit
 ) {
     var creditAdjustText by remember { mutableStateOf("") }
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
@@ -651,6 +750,7 @@ fun UserDetailCard(
                 if (value != null) {
                     onUpdateCredit(value)
                     creditAdjustText = ""
+                    keyboardController?.hide()
                 }
             }
 
@@ -723,6 +823,7 @@ fun EditUserDialog(
     var loan by remember { mutableStateOf(user.loanInt.toString()) }
 
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -744,7 +845,8 @@ fun EditUserDialog(
                     value = loan,
                     onValueChange = { loan = it },
                     label = { Text("Loan") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() })
                 )
             }
         },
@@ -774,6 +876,7 @@ fun EditUserDialog(
                             credit = credit.toIntOrNull() ?: 0,
                             loan = loan.toIntOrNull() ?: 0
                         ))
+                        keyboardController?.hide()
                     }) {
                         Text("Mentés")
                     }
@@ -793,6 +896,7 @@ fun EditUserDialog(
                     onClick = {
                         onDelete(user)
                         showDeleteConfirm = false
+                        keyboardController?.hide()
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {

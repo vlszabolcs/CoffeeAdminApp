@@ -5,7 +5,10 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.database.DataSnapshot
+import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.getValue
 
 class UserViewModel : ViewModel() {
@@ -42,13 +45,49 @@ class UserViewModel : ViewModel() {
     private val _error = mutableStateOf<String?>(null)
     val error: State<String?> = _error
 
+    private val _successMessage = mutableStateOf<String?>(null)
+    val successMessage: State<String?> = _successMessage
+
     private val _isLoggedIn = mutableStateOf(auth.currentUser != null)
     val isLoggedIn: State<Boolean> = _isLoggedIn
+
+    private val _machineConfig = mutableStateOf(MachineConfig())
+    val machineConfig: State<MachineConfig> = _machineConfig
 
     init {
         if (auth.currentUser != null) {
             fetchAllUsers()
+            listenToMachineConfig()
         }
+    }
+
+    private fun listenToMachineConfig() {
+        database.child("conf").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val config = snapshot.getValue<MachineConfig>()
+                if (config != null) {
+                    _machineConfig.value = config
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                _error.value = error.message
+            }
+        })
+    }
+
+    fun clearSuccessMessage() {
+        _successMessage.value = null
+    }
+
+    fun updateMachineConfig(config: MachineConfig) {
+        database.child("conf").setValue(config)
+            .addOnSuccessListener {
+                _successMessage.value = "Sikeresen frissítve!"
+            }
+            .addOnFailureListener {
+                _error.value = "Sikertelen gép beállítás frissítés: ${it.message}"
+            }
     }
 
     fun setSearchQuery(query: String) {
@@ -63,6 +102,7 @@ class UserViewModel : ViewModel() {
                 _isLoggedIn.value = true
                 _isLoading.value = false
                 fetchAllUsers()
+                listenToMachineConfig()
             }
             .addOnFailureListener {
                 _error.value = it.message
@@ -143,6 +183,7 @@ class UserViewModel : ViewModel() {
                     _searchedUser.value = _searchedUser.value?.copy(credit = newCredit)
                 }
                 fetchAllUsers() 
+                _successMessage.value = "Kredit frissítve!"
             }
             .addOnFailureListener {
                 _error.value = "Sikertelen frissítés: ${it.message}"
@@ -166,6 +207,7 @@ class UserViewModel : ViewModel() {
                 }
                 _isLoading.value = false
                 fetchAllUsers()
+                _successMessage.value = "Felhasználó mentve!"
             }
             .addOnFailureListener {
                 _error.value = "Sikertelen mentés: ${it.message}"
@@ -183,6 +225,7 @@ class UserViewModel : ViewModel() {
                 }
                 _isLoading.value = false
                 fetchAllUsers()
+                _successMessage.value = "Felhasználó törölve!"
             }
             .addOnFailureListener {
                 _error.value = "Sikertelen törlés: ${it.message}"
