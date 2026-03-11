@@ -9,9 +9,9 @@
               <option name="connection">
                 <ConnectionSetting>
                   <option name="appId" value="com.example.coffeeadmin" />
-                  <option name="mobileSdkAppId" value="1:461656468814:android:9f78edb701f763e7b5821f" />
-                  <option name="projectId" value="espresso-1d82f" />
-                  <option name="projectNumber" value="461656468814" />
+                  <option name="mobileSdkAppId" value="1:149429526307:android:67146fe028fc4d0f42f696" />
+                  <option name="projectId" value="coffeegg-a4840" />
+                  <option name="projectNumber" value="149429526307" />
                 </ConnectionSetting>
               </option>
               <option name="signal" value="SIGNAL_UNSPECIFIED" />

@@ -172,4 +172,21 @@ class UserViewModel : ViewModel() {
                 _isLoading.value = false
             }
     }
+
+    fun deleteUser(user: User) {
+        val uid = user.uid ?: return
+        _isLoading.value = true
+        database.child("users").child(uid).removeValue()
+            .addOnSuccessListener {
+                if (_searchedUser.value?.uid == uid) {
+                    _searchedUser.value = null
+                }
+                _isLoading.value = false
+                fetchAllUsers()
+            }
+            .addOnFailureListener {
+                _error.value = "Sikertelen törlés: ${it.message}"
+                _isLoading.value = false
+            }
+    }
 }
