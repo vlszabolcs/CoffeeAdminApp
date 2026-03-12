@@ -128,6 +128,7 @@ class MainActivity : ComponentActivity() {
                                     )
                                     AdminScreen.SEARCH -> UserSearchScreen(
                                         viewModel = viewModel,
+                                        nfcEnabled = nfcOn,
                                         modifier = Modifier.padding(innerPadding)
                                     )
                                     AdminScreen.MACHINE -> MachineScreen(
@@ -139,8 +140,8 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // Centered Warnings Overlay
-                    ConnectivityWarning(hasInternet = hasInternet, nfcEnabled = nfcOn)
+                    // Centered Warnings Overlay (Only for Internet now)
+                    ConnectivityWarning(hasInternet = hasInternet)
                 }
             }
         }
@@ -204,9 +205,8 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun ConnectivityWarning(hasInternet: Boolean, nfcEnabled: Boolean) {
-    val context = LocalContext.current
-    if (!hasInternet || !nfcEnabled) {
+fun ConnectivityWarning(hasInternet: Boolean) {
+    if (!hasInternet) {
         // Semi-transparent background to draw focus to the warnings
         Box(
             modifier = Modifier
@@ -221,58 +221,60 @@ fun ConnectivityWarning(hasInternet: Boolean, nfcEnabled: Boolean) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                AnimatedVisibility(visible = !hasInternet) {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color.Red),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color.Red),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.Warning, contentDescription = null, tint = Color.White)
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = "Nincs internetkapcsolat!",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center
-                            )
-                        }
+                        Icon(Icons.Default.Warning, contentDescription = null, tint = Color.White)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "Nincs internetkapcsolat!",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
                     }
                 }
-                
-                AnimatedVisibility(visible = !nfcEnabled) {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFA500)),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                        modifier = Modifier.clickable {
-                            try {
-                                context.startActivity(Intent(Settings.ACTION_NFC_SETTINGS))
-                            } catch (e: Exception) {
-                                try {
-                                    context.startActivity(Intent(Settings.ACTION_SETTINGS))
-                                } catch (e2: Exception) {
-                                    Toast.makeText(context, "Nem sikerült megnyitni a beállításokat", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.Warning, contentDescription = null, tint = Color.White)
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = "Az NFC nincs bekapcsolva!\nKattints ide a bekapcsoláshoz.",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center
-                            )
-                        }
+            }
+        }
+    }
+}
+
+@Composable
+fun NfcWarning(nfcEnabled: Boolean) {
+    val context = LocalContext.current
+    AnimatedVisibility(visible = !nfcEnabled) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFA500)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+            modifier = Modifier.clickable {
+                try {
+                    context.startActivity(Intent(Settings.ACTION_NFC_SETTINGS))
+                } catch (e: Exception) {
+                    try {
+                        context.startActivity(Intent(Settings.ACTION_SETTINGS))
+                    } catch (e2: Exception) {
+                        Toast.makeText(context, "Nem sikerült megnyitni a beállításokat", Toast.LENGTH_SHORT).show()
                     }
                 }
+            }
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.Warning, contentDescription = null, tint = Color.White)
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = "Az NFC nincs bekapcsolva!\nKattints ide a bekapcsoláshoz.",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
             }
         }
     }
@@ -508,6 +510,7 @@ fun UserListContent(
 @Composable
 fun UserSearchScreen(
     viewModel: UserViewModel,
+    nfcEnabled: Boolean,
     modifier: Modifier = Modifier
 ) {
     val searchedUser by viewModel.searchedUser
@@ -531,6 +534,11 @@ fun UserSearchScreen(
                 Text("Kilépés")
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // NFC Warning integrated into the search view
+        NfcWarning(nfcEnabled = nfcEnabled)
 
         Spacer(modifier = Modifier.height(16.dp))
 
