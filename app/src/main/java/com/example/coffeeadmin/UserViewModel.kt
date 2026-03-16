@@ -23,18 +23,34 @@ class UserViewModel : ViewModel() {
 
     val filteredUserList: State<List<User>> = derivedStateOf {
         val query = _searchQuery.value.lowercase()
-        if (query.isEmpty()) {
-            _userList.value
+        val allUsers = _userList.value
+        
+        val filtered = if (query.isEmpty()) {
+            allUsers
         } else {
-            _userList.value.filter { 
+            allUsers.filter { 
                 (it.name?.lowercase()?.contains(query) == true) || 
                 (it.uid?.lowercase()?.contains(query) == true)
             }
         }
+
+        val oneMonthAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
+        
+        val activeUsers = filtered.filter { (it.lastUpdate ?: 0L) >= oneMonthAgo }
+        val inactiveUsers = filtered.filter { (it.lastUpdate ?: 0L) < oneMonthAgo }
+
+        val sortedActive = activeUsers.sortedWith(
+            compareBy<User> { it.creditInt }
+                .thenBy { it.name?.lowercase() ?: "" }
+        )
+        
+        val sortedInactive = inactiveUsers.sortedBy { it.name?.lowercase() ?: "" }
+
+        sortedActive + sortedInactive
     }
 
-    private val _searchedUser = mutableStateOf<User?>(null)
-    val searchedUser: State<User?> = _searchedUser
+    private val _scannedUid = mutableStateOf<String?>(null)
+    val scannedUid: State<String?> = _scannedUid
 
     private val _scannedUidForRegistration = mutableStateOf<String?>(null)
     val scannedUidForRegistration: State<String?> = _scannedUidForRegistration
@@ -114,9 +130,13 @@ class UserViewModel : ViewModel() {
         auth.signOut()
         _isLoggedIn.value = false
         _userList.value = emptyList()
-        _searchedUser.value = null
+        _scannedUid.value = null
         _scannedUidForRegistration.value = null
         _searchQuery.value = ""
+    }
+
+    fun clearScannedUid() {
+        _scannedUid.value = null
     }
 
     fun clearRegistrationUid() {
@@ -145,43 +165,46 @@ class UserViewModel : ViewModel() {
             }
     }
 
-    fun selectUser(user: User) {
-        _searchedUser.value = user
-        _scannedUidForRegistration.value = null
-    }
-
     fun searchUserByUid(uid: String) {
         if (uid.isBlank()) return
-        _isLoading.value = true
-        _error.value = null
-        _searchedUser.value = null
-        _scannedUidForRegistration.value = null
-
-        database.child("users").child(uid).get()
-            .addOnSuccessListener { snapshot ->
-                val user = snapshot.getValue<User>()
-                if (user != null) {
-                    _searchedUser.value = user.copy(uid = snapshot.key)
-                } else {
-                    _scannedUidForRegistration.value = uid
+        
+        val user = _userList.value.find { it.uid == uid }
+        if (user != null) {
+            _scannedUid.value = uid
+            _scannedUidForRegistration.value = null
+        } else {
+            _isLoading.value = true
+            database.child("users").child(uid).get()
+                .addOnSuccessListener { snapshot ->
+                    if (snapshot.exists()) {
+                        _scannedUid.value = uid
+                        _scannedUidForRegistration.value = null
+                        fetchAllUsers() 
+                    } else {
+                        _scannedUidForRegistration.value = uid
+                        _scannedUid.value = null
+                    }
+                    _isLoading.value = false
                 }
-                _isLoading.value = false
-            }
-            .addOnFailureListener { exception ->
-                _error.value = exception.message
-                _isLoading.value = false
-            }
+                .addOnFailureListener {
+                    _error.value = it.message
+                    _isLoading.value = false
+                }
+        }
     }
 
     fun updateCredit(user: User, amount: Int) {
         val uid = user.uid ?: return
         val newCredit = user.creditInt + amount
+        val now = System.currentTimeMillis()
         
-        database.child("users").child(uid).child("credit").setValue(newCredit)
+        val updates = mapOf(
+            "credit" to newCredit,
+            "lastUpdate" to now
+        )
+        
+        database.child("users").child(uid).updateChildren(updates)
             .addOnSuccessListener {
-                if (_searchedUser.value?.uid == uid) {
-                    _searchedUser.value = _searchedUser.value?.copy(credit = newCredit)
-                }
                 fetchAllUsers() 
                 _successMessage.value = "Kredit frissítve!"
             }
@@ -193,18 +216,17 @@ class UserViewModel : ViewModel() {
     fun updateUser(updatedUser: User) {
         val uid = updatedUser.uid ?: return
         _isLoading.value = true
+        val now = System.currentTimeMillis()
         
         val userMap = mapOf(
             "name" to updatedUser.name,
             "credit" to updatedUser.creditInt,
-            "loan" to updatedUser.loanInt
+            "loan" to updatedUser.loanInt,
+            "lastUpdate" to now
         )
 
         database.child("users").child(uid).updateChildren(userMap)
             .addOnSuccessListener {
-                if (_searchedUser.value?.uid == uid) {
-                    _searchedUser.value = updatedUser
-                }
                 _isLoading.value = false
                 fetchAllUsers()
                 _successMessage.value = "Felhasználó mentve!"
@@ -220,9 +242,6 @@ class UserViewModel : ViewModel() {
         _isLoading.value = true
         database.child("users").child(uid).removeValue()
             .addOnSuccessListener {
-                if (_searchedUser.value?.uid == uid) {
-                    _searchedUser.value = null
-                }
                 _isLoading.value = false
                 fetchAllUsers()
                 _successMessage.value = "Felhasználó törölve!"

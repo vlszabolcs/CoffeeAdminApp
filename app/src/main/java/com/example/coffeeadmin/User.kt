@@ -8,10 +8,11 @@ data class User(
     val uid: String? = null,
     val name: String? = null,
     val credit: Any? = 0,
-    val loan: Any? = 0
+    val loan: Any? = 0,
+    val lastUpdate: Long? = 0
 ) {
     // No-argument constructor for Firebase
-    constructor() : this(null, null, 0, 0)
+    constructor() : this(null, null, 0, 0, 0)
 
     @get:Exclude
     val creditInt: Int
@@ -35,7 +36,8 @@ data class User(
         return mapOf(
             "name" to name,
             "credit" to creditInt,
-            "loan" to loanInt
+            "loan" to loanInt,
+            "lastUpdate" to lastUpdate
         )
     }
 }

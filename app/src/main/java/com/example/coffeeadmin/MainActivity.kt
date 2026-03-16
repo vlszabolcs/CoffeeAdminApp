@@ -13,6 +13,7 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -30,9 +31,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.example.coffeeadmin.ui.theme.CoffeeAdminTheme
+import kotlinx.coroutines.launch
 
 enum class AdminScreen {
-    LIST, SEARCH, MACHINE
+    LIST, MACHINE
 }
 
 class MainActivity : ComponentActivity() {
@@ -40,7 +42,7 @@ class MainActivity : ComponentActivity() {
     private var nfcAdapter: NfcAdapter? = null
     private var pendingIntent: PendingIntent? = null
 
-    private var currentScreenState = mutableStateOf(AdminScreen.SEARCH)
+    private var currentScreenState = mutableStateOf(AdminScreen.LIST)
     private var isNetworkAvailable = mutableStateOf(true)
     private var isNfcEnabled = mutableStateOf(true)
 
@@ -101,12 +103,6 @@ class MainActivity : ComponentActivity() {
                                 bottomBar = {
                                     NavigationBar {
                                         NavigationBarItem(
-                                            selected = currentScreen == AdminScreen.SEARCH,
-                                            onClick = { currentScreen = AdminScreen.SEARCH },
-                                            icon = { Icon(Icons.Default.Search, contentDescription = "Keresés") },
-                                            label = { Text("Keresés") }
-                                        )
-                                        NavigationBarItem(
                                             selected = currentScreen == AdminScreen.LIST,
                                             onClick = { currentScreen = AdminScreen.LIST },
                                             icon = { Icon(Icons.Default.List, contentDescription = "Lista") },
@@ -124,10 +120,6 @@ class MainActivity : ComponentActivity() {
                                 when (currentScreen) {
                                     AdminScreen.LIST -> UserListScreen(
                                         viewModel = viewModel,
-                                        modifier = Modifier.padding(innerPadding)
-                                    )
-                                    AdminScreen.SEARCH -> UserSearchScreen(
-                                        viewModel = viewModel,
                                         nfcEnabled = nfcOn,
                                         modifier = Modifier.padding(innerPadding)
                                     )
@@ -140,7 +132,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // Centered Warnings Overlay (Only for Internet now)
+                    // Centered Warnings Overlay
                     ConnectivityWarning(hasInternet = hasInternet)
                 }
             }
@@ -181,7 +173,7 @@ class MainActivity : ComponentActivity() {
 
     private fun handleScannedUid(uid: String) {
         if (viewModel.isLoggedIn.value) {
-            currentScreenState.value = AdminScreen.SEARCH
+            currentScreenState.value = AdminScreen.LIST
             viewModel.searchUserByUid(uid)
             Toast.makeText(this, "Kártya beolvasva: $uid", Toast.LENGTH_SHORT).show()
         } else {
@@ -207,13 +199,12 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun ConnectivityWarning(hasInternet: Boolean) {
     if (!hasInternet) {
-        // Semi-transparent background to draw focus to the warnings
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = 0.3f))
                 .zIndex(10f)
-                .clickable(enabled = false) {}, // Intercept clicks
+                .clickable(enabled = false) {},
             contentAlignment = Alignment.Center
         ) {
             Column(
@@ -296,9 +287,7 @@ fun LoginScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.Center
     ) {
         Text(text = "Coffee Admin Login", style = MaterialTheme.typography.headlineMedium)
-
         Spacer(modifier = Modifier.height(32.dp))
-
         TextField(
             value = email,
             onValueChange = { email = it },
@@ -306,9 +295,7 @@ fun LoginScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
             modifier = Modifier.fillMaxWidth(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next)
         )
-
         Spacer(modifier = Modifier.height(16.dp))
-
         TextField(
             value = password,
             onValueChange = { password = it },
@@ -321,9 +308,7 @@ fun LoginScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
                 keyboardController?.hide()
             })
         )
-
         Spacer(modifier = Modifier.height(24.dp))
-
         if (isLoading) {
             CircularProgressIndicator()
         } else {
@@ -337,7 +322,6 @@ fun LoginScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
                 Text("Bejelentkezés")
             }
         }
-
         error?.let {
             Spacer(modifier = Modifier.height(16.dp))
             Text(text = it, color = Color.Red)
@@ -346,23 +330,39 @@ fun LoginScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun UserListScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
+fun UserListScreen(viewModel: UserViewModel, nfcEnabled: Boolean, modifier: Modifier = Modifier) {
     val userList by viewModel.filteredUserList
     val searchQuery by viewModel.searchQuery
     val isLoading by viewModel.isLoading
     val error by viewModel.error
+    val scannedUid by viewModel.scannedUid
+    val registrationUid by viewModel.scannedUidForRegistration
+    val successMessage by viewModel.successMessage
+    val context = LocalContext.current
+
+    LaunchedEffect(successMessage) {
+        successMessage?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.clearSuccessMessage()
+        }
+    }
 
     UserListContent(
         userList = userList,
         searchQuery = searchQuery,
         isLoading = isLoading,
         error = error,
+        scannedUid = scannedUid,
+        registrationUid = registrationUid,
+        nfcEnabled = nfcEnabled,
         onLogout = { viewModel.logout() },
         onSearchQueryChange = { viewModel.setSearchQuery(it) },
         onRefresh = { viewModel.fetchAllUsers() },
         onUpdateCredit = { user, amount -> viewModel.updateCredit(user, amount) },
         onUpdateUser = { updatedUser -> viewModel.updateUser(updatedUser) },
         onDeleteUser = { user -> viewModel.deleteUser(user) },
+        onClearScannedUid = { viewModel.clearScannedUid() },
+        onClearRegistrationUid = { viewModel.clearRegistrationUid() },
         modifier = modifier
     )
 }
@@ -373,18 +373,39 @@ fun UserListContent(
     searchQuery: String,
     isLoading: Boolean,
     error: String?,
+    scannedUid: String?,
+    registrationUid: String?,
+    nfcEnabled: Boolean,
     onLogout: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onRefresh: () -> Unit,
     onUpdateCredit: (User, Int) -> Unit,
     onUpdateUser: (User) -> Unit,
     onDeleteUser: (User) -> Unit,
+    onClearScannedUid: () -> Unit,
+    onClearRegistrationUid: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var showEditDialog by remember { mutableStateOf(false) }
     var userToEdit by remember { mutableStateOf<User?>(null) }
     var expandedUserId by remember { mutableStateOf<String?>(null) }
     val keyboardController = LocalSoftwareKeyboardController.current
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+
+    // Handle NFC scan expansion
+    LaunchedEffect(scannedUid) {
+        scannedUid?.let { uid ->
+            expandedUserId = uid
+            val index = userList.indexOfFirst { it.uid == uid }
+            if (index != -1) {
+                scope.launch {
+                    listState.animateScrollToItem(index)
+                }
+            }
+            onClearScannedUid()
+        }
+    }
 
     Column(modifier = modifier.padding(16.dp)) {
         Row(
@@ -398,6 +419,8 @@ fun UserListContent(
             }
         }
 
+        Spacer(modifier = Modifier.height(8.dp))
+        NfcWarning(nfcEnabled = nfcEnabled)
         Spacer(modifier = Modifier.height(8.dp))
 
         OutlinedTextField(
@@ -453,7 +476,7 @@ fun UserListContent(
         }
         HorizontalDivider()
 
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(modifier = Modifier.fillMaxSize(), state = listState) {
             items(userList, key = { it.uid ?: it.hashCode() }) { user ->
                 Column {
                     UserRow(
@@ -486,6 +509,29 @@ fun UserListContent(
         }
     }
 
+    // Registration Dialog
+    if (registrationUid != null) {
+        AlertDialog(
+            onDismissRequest = onClearRegistrationUid,
+            title = { Text("Felhasználó nem található") },
+            text = { Text("A beolvasott kártya ($registrationUid) nincs regisztrálva. Szeretnéd regisztrálni?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    userToEdit = User(uid = registrationUid, name = "", credit = 0, loan = 0)
+                    showEditDialog = true
+                    onClearRegistrationUid()
+                }) {
+                    Text("Igen")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onClearRegistrationUid) {
+                    Text("Mégse")
+                }
+            }
+        )
+    }
+
     if (showEditDialog && userToEdit != null) {
         EditUserDialog(
             user = userToEdit!!,
@@ -508,143 +554,19 @@ fun UserListContent(
 }
 
 @Composable
-fun UserSearchScreen(
-    viewModel: UserViewModel,
-    nfcEnabled: Boolean,
-    modifier: Modifier = Modifier
-) {
-    val searchedUser by viewModel.searchedUser
-    val registrationUid by viewModel.scannedUidForRegistration
-    val isLoading by viewModel.isLoading
-    val error by viewModel.error
-
-    var showEditDialog by remember { mutableStateOf(false) }
-    var userToEdit by remember { mutableStateOf<User?>(null) }
-    var manualUidSearch by remember { mutableStateOf("") }
-    val keyboardController = LocalSoftwareKeyboardController.current
-
-    Column(modifier = modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(text = "Keresés", style = MaterialTheme.typography.headlineSmall)
-            Spacer(modifier = Modifier.weight(1f))
-            Button(onClick = { viewModel.logout() }) {
-                Text("Kilépés")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // NFC Warning integrated into the search view
-        NfcWarning(nfcEnabled = nfcEnabled)
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        OutlinedTextField(
-            value = manualUidSearch,
-            onValueChange = { if (it.length <= 10000) manualUidSearch = it },
-            label = { Text("UID Kézi keresés") },
-            modifier = Modifier
-                .fillMaxWidth()
-                .widthIn(max = 10000.dp),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = {
-                viewModel.searchUserByUid(manualUidSearch)
-                keyboardController?.hide()
-            }),
-            trailingIcon = {
-                IconButton(onClick = {
-                    viewModel.searchUserByUid(manualUidSearch)
-                    keyboardController?.hide()
-                }) {
-                    Icon(Icons.Default.Search, contentDescription = "Keresés")
-                }
-            },
-            singleLine = true
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        if (searchedUser == null && registrationUid == null && !isLoading) {
-            Text(
-                text = "Kérlek érints oda egy kártyát vagy keress rá manuálisan!",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.Gray
-            )
-        }
-
-        if (isLoading) {
-            CircularProgressIndicator()
-        }
-
-        error?.let {
-            Text(text = "Hiba: $it", color = Color.Red)
-        }
-
-        searchedUser?.let { user ->
-            UserDetailCard(
-                user = user,
-                onEditClick = {
-                    userToEdit = user
-                    showEditDialog = true
-                },
-                onUpdateCredit = { amount ->
-                    viewModel.updateCredit(user, amount)
-                }
-            )
-        }
-    }
-
-    if (registrationUid != null) {
-        AlertDialog(
-            onDismissRequest = { viewModel.clearRegistrationUid() },
-            title = { Text("Felhasználó nem található") },
-            text = { Text("A beolvasott kártya ($registrationUid) nincs regisztrálva. Szeretnéd regisztrálni?") },
-            confirmButton = {
-                TextButton(onClick = {
-                    userToEdit = User(uid = registrationUid, name = "", credit = 0, loan = 0)
-                    showEditDialog = true
-                    viewModel.clearRegistrationUid()
-                }) {
-                    Text("Igen")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.clearRegistrationUid() }) {
-                    Text("Mégse")
-                }
-            }
-        )
-    }
-
-    if (showEditDialog && userToEdit != null) {
-        EditUserDialog(
-            user = userToEdit!!,
-            onDismiss = {
-                showEditDialog = false
-                userToEdit = null
-            },
-            onSave = { updatedUser ->
-                viewModel.updateUser(updatedUser)
-                showEditDialog = false
-                userToEdit = null
-            },
-            onDelete = { userToDelete ->
-                viewModel.deleteUser(userToDelete)
-                showEditDialog = false
-                userToEdit = null
-            }
-        )
-    }
-}
-
-@Composable
 fun MachineScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
     val config by viewModel.machineConfig
+    val successMessage by viewModel.successMessage
     var priceText by remember(config.price) { mutableStateOf(config.price.toString()) }
     val keyboardController = LocalSoftwareKeyboardController.current
+    val context = LocalContext.current
+
+    LaunchedEffect(successMessage) {
+        successMessage?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.clearSuccessMessage()
+        }
+    }
 
     Column(
         modifier = modifier.fillMaxSize().padding(16.dp),
@@ -735,13 +657,10 @@ fun UserDetailCard(
                     Icon(Icons.Default.Edit, contentDescription = "Szerkesztés")
                 }
             }
-
             Spacer(modifier = Modifier.height(16.dp))
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-
             ) {
                 Text(text = "Kredit:", fontWeight = FontWeight.Bold, fontSize = 15.sp, textAlign = TextAlign.Center)
                 Spacer(modifier = Modifier.width(8.dp))
@@ -750,9 +669,7 @@ fun UserDetailCard(
                     color = MaterialTheme.colorScheme.primary,
                     fontSize = 30.sp,)
             }
-
             Spacer(modifier = Modifier.height(12.dp))
-
             val onUpdate: () -> Unit = {
                 val value = creditAdjustText.toIntOrNull()
                 if (value != null) {
@@ -761,7 +678,6 @@ fun UserDetailCard(
                     keyboardController?.hide()
                 }
             }
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -775,9 +691,7 @@ fun UserDetailCard(
                 ) {
                     Text("-500")
                 }
-
                 Spacer(modifier = Modifier.width(4.dp))
-
                 OutlinedTextField(
                     value = creditAdjustText,
                     onValueChange = { if (it.length <= 10000) creditAdjustText = it },
@@ -792,9 +706,7 @@ fun UserDetailCard(
                     keyboardActions = KeyboardActions(onDone = { onUpdate() }),
                     singleLine = true
                 )
-
                 Spacer(modifier = Modifier.width(4.dp))
-
                 Button(
                     onClick = {
                         val current = creditAdjustText.toIntOrNull() ?: 0
@@ -805,9 +717,7 @@ fun UserDetailCard(
                     Text("+500")
                 }
             }
-
             Spacer(modifier = Modifier.height(8.dp))
-
             Button(
                 onClick = onUpdate,
                 modifier = Modifier.fillMaxWidth().height(56.dp)
@@ -829,7 +739,6 @@ fun EditUserDialog(
     var name by remember { mutableStateOf(user.name ?: "") }
     var credit by remember { mutableStateOf(user.creditInt.toString()) }
     var loan by remember { mutableStateOf(user.loanInt.toString()) }
-
     var showDeleteConfirm by remember { mutableStateOf(false) }
     val keyboardController = LocalSoftwareKeyboardController.current
 
@@ -872,7 +781,6 @@ fun EditUserDialog(
                 ) {
                     Icon(Icons.Default.Delete, contentDescription = "Törlés")
                 }
-
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TextButton(onClick = onDismiss) {
                         Text("Mégse")
@@ -948,12 +856,17 @@ fun UserListScreenPreview() {
             searchQuery = "",
             isLoading = false,
             error = null,
+            scannedUid = null,
+            registrationUid = null,
+            nfcEnabled = true,
             onLogout = {},
             onSearchQueryChange = {},
             onRefresh = {},
             onUpdateCredit = { _, _ -> },
             onUpdateUser = {},
-            onDeleteUser = {}
+            onDeleteUser = {},
+            onClearScannedUid = {},
+            onClearRegistrationUid = {}
         )
     }
 }
