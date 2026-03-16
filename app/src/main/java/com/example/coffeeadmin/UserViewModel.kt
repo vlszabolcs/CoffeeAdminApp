@@ -34,17 +34,20 @@ class UserViewModel : ViewModel() {
             }
         }
 
-        val oneMonthAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
+        // Use seconds for consistency with Firebase example (10 digits)
+        val nowSeconds = System.currentTimeMillis() / 1000
+        val thirtyDaysInSeconds = 30L * 24 * 60 * 60
+        val threshold = nowSeconds - thirtyDaysInSeconds
         
-        val activeUsers = filtered.filter { (it.lastUpdate ?: 0L) >= oneMonthAgo }
-        val inactiveUsers = filtered.filter { (it.lastUpdate ?: 0L) < oneMonthAgo }
+        // Active users: updated within the last 30 days
+        val activeUsers = filtered.filter { it.updateLong > threshold }
+        val inactiveUsers = filtered.filter { it.updateLong <= threshold }
 
-        val sortedActive = activeUsers.sortedWith(
-            compareBy<User> { it.creditInt }
-                .thenBy { it.name?.lowercase() ?: "" }
-        )
+        // Active users sorted by credit ascending
+        val sortedActive = activeUsers.sortedBy { it.creditInt }
         
-        val sortedInactive = inactiveUsers.sortedBy { it.name?.lowercase() ?: "" }
+        // Inactive users at the end (sorted by update descending so most recent is first)
+        val sortedInactive = inactiveUsers.sortedByDescending { it.updateLong }
 
         sortedActive + sortedInactive
     }
@@ -196,11 +199,11 @@ class UserViewModel : ViewModel() {
     fun updateCredit(user: User, amount: Int) {
         val uid = user.uid ?: return
         val newCredit = user.creditInt + amount
-        val now = System.currentTimeMillis()
+        val now = System.currentTimeMillis() / 1000 // Seconds
         
         val updates = mapOf(
             "credit" to newCredit,
-            "lastUpdate" to now
+            "update" to now
         )
         
         database.child("users").child(uid).updateChildren(updates)
@@ -216,13 +219,13 @@ class UserViewModel : ViewModel() {
     fun updateUser(updatedUser: User) {
         val uid = updatedUser.uid ?: return
         _isLoading.value = true
-        val now = System.currentTimeMillis()
+        val now = System.currentTimeMillis() / 1000 // Seconds
         
         val userMap = mapOf(
             "name" to updatedUser.name,
             "credit" to updatedUser.creditInt,
             "loan" to updatedUser.loanInt,
-            "lastUpdate" to now
+            "update" to now
         )
 
         database.child("users").child(uid).updateChildren(userMap)

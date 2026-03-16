@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,7 +27,6 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -105,7 +105,7 @@ class MainActivity : ComponentActivity() {
                                         NavigationBarItem(
                                             selected = currentScreen == AdminScreen.LIST,
                                             onClick = { currentScreen = AdminScreen.LIST },
-                                            icon = { Icon(Icons.Default.List, contentDescription = "Lista") },
+                                            icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Lista") },
                                             label = { Text("Lista") }
                                         )
                                         NavigationBarItem(
@@ -163,6 +163,7 @@ class MainActivity : ComponentActivity() {
             NfcAdapter.ACTION_TECH_DISCOVERED == intent.action ||
             NfcAdapter.ACTION_NDEF_DISCOVERED == intent.action) {
             
+            @Suppress("DEPRECATION")
             val tag = intent.getParcelableExtra<Tag>(NfcAdapter.EXTRA_TAG)
             tag?.let {
                 val uid = bytesToHexString(it.id)
@@ -304,27 +305,28 @@ fun LoginScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = {
-                viewModel.login(email, password)
                 keyboardController?.hide()
+                viewModel.login(email, password)
             })
         )
         Spacer(modifier = Modifier.height(24.dp))
-        if (isLoading) {
-            CircularProgressIndicator()
-        } else {
-            Button(
-                onClick = {
-                    viewModel.login(email, password)
-                    keyboardController?.hide()
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
+        Button(
+            onClick = {
+                keyboardController?.hide()
+                viewModel.login(email, password)
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isLoading && email.isNotBlank() && password.isNotBlank()
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+            } else {
                 Text("Bejelentkezés")
             }
         }
         error?.let {
             Spacer(modifier = Modifier.height(16.dp))
-            Text(text = it, color = Color.Red)
+            Text(text = it, color = MaterialTheme.colorScheme.error)
         }
     }
 }
@@ -332,234 +334,31 @@ fun LoginScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
 @Composable
 fun UserListScreen(viewModel: UserViewModel, nfcEnabled: Boolean, modifier: Modifier = Modifier) {
     val userList by viewModel.filteredUserList
-    val searchQuery by viewModel.searchQuery
     val isLoading by viewModel.isLoading
-    val error by viewModel.error
+    val searchQuery by viewModel.searchQuery
     val scannedUid by viewModel.scannedUid
     val registrationUid by viewModel.scannedUidForRegistration
     val successMessage by viewModel.successMessage
-    val context = LocalContext.current
 
-    LaunchedEffect(successMessage) {
-        successMessage?.let {
-            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
-            viewModel.clearSuccessMessage()
-        }
-    }
-
-    UserListContent(
-        userList = userList,
-        searchQuery = searchQuery,
-        isLoading = isLoading,
-        error = error,
-        scannedUid = scannedUid,
-        registrationUid = registrationUid,
-        nfcEnabled = nfcEnabled,
-        onLogout = { viewModel.logout() },
-        onSearchQueryChange = { viewModel.setSearchQuery(it) },
-        onRefresh = { viewModel.fetchAllUsers() },
-        onUpdateCredit = { user, amount -> viewModel.updateCredit(user, amount) },
-        onUpdateUser = { updatedUser -> viewModel.updateUser(updatedUser) },
-        onDeleteUser = { user -> viewModel.deleteUser(user) },
-        onClearScannedUid = { viewModel.clearScannedUid() },
-        onClearRegistrationUid = { viewModel.clearRegistrationUid() },
-        modifier = modifier
-    )
-}
-
-@Composable
-fun UserListContent(
-    userList: List<User>,
-    searchQuery: String,
-    isLoading: Boolean,
-    error: String?,
-    scannedUid: String?,
-    registrationUid: String?,
-    nfcEnabled: Boolean,
-    onLogout: () -> Unit,
-    onSearchQueryChange: (String) -> Unit,
-    onRefresh: () -> Unit,
-    onUpdateCredit: (User, Int) -> Unit,
-    onUpdateUser: (User) -> Unit,
-    onDeleteUser: (User) -> Unit,
-    onClearScannedUid: () -> Unit,
-    onClearRegistrationUid: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var showEditDialog by remember { mutableStateOf(false) }
-    var userToEdit by remember { mutableStateOf<User?>(null) }
     var expandedUserId by remember { mutableStateOf<String?>(null) }
-    val keyboardController = LocalSoftwareKeyboardController.current
+    var userToEdit by remember { mutableStateOf<User?>(null) }
+
     val listState = rememberLazyListState()
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // Handle NFC scan expansion
     LaunchedEffect(scannedUid) {
         scannedUid?.let { uid ->
-            expandedUserId = uid
             val index = userList.indexOfFirst { it.uid == uid }
             if (index != -1) {
+                expandedUserId = uid
                 scope.launch {
                     listState.animateScrollToItem(index)
                 }
             }
-            onClearScannedUid()
+            viewModel.clearScannedUid()
         }
     }
-
-    Column(modifier = modifier.padding(16.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(text = "Felhasználók", style = MaterialTheme.typography.headlineSmall)
-            Spacer(modifier = Modifier.weight(1f))
-            Button(onClick = onLogout) {
-                Text("Kilépés")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-        NfcWarning(nfcEnabled = nfcEnabled)
-        Spacer(modifier = Modifier.height(8.dp))
-
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = onSearchQueryChange,
-            label = { Text("Keresés név vagy UID alapján") },
-            modifier = Modifier.fillMaxWidth(),
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            trailingIcon = {
-                if (searchQuery.isNotEmpty()) {
-                    IconButton(onClick = { onSearchQueryChange("") }) {
-                        Icon(Icons.Default.Close, contentDescription = "Törlés")
-                    }
-                }
-            },
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { keyboardController?.hide() }),
-            singleLine = true
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Button(
-            onClick = {
-                onRefresh()
-                keyboardController?.hide()
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Lista Frissítése")
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        if (isLoading) {
-            CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
-        }
-
-        error?.let {
-            Text(text = "Hiba: $it", color = Color.Red)
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.primaryContainer)
-                .padding(8.dp)
-        ) {
-            Text(text = "Név", modifier = Modifier.weight(1.5f), fontWeight = FontWeight.Bold)
-            Text(text = "Kredit", modifier = Modifier.weight(0.5f), fontWeight = FontWeight.Bold)
-        }
-        HorizontalDivider()
-
-        LazyColumn(modifier = Modifier.fillMaxSize(), state = listState) {
-            items(userList, key = { it.uid ?: it.hashCode() }) { user ->
-                Column {
-                    UserRow(
-                        user = user,
-                        onClick = {
-                            expandedUserId = if (expandedUserId == user.uid) null else user.uid
-                        }
-                    )
-                    AnimatedVisibility(
-                        visible = expandedUserId == user.uid,
-                        enter = expandVertically(),
-                        exit = shrinkVertically()
-                    ) {
-                        Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                            UserDetailCard(
-                                user = user,
-                                onEditClick = {
-                                    userToEdit = user
-                                    showEditDialog = true
-                                },
-                                onUpdateCredit = { amount ->
-                                    onUpdateCredit(user, amount)
-                                }
-                            )
-                        }
-                    }
-                    HorizontalDivider()
-                }
-            }
-        }
-    }
-
-    // Registration Dialog
-    if (registrationUid != null) {
-        AlertDialog(
-            onDismissRequest = onClearRegistrationUid,
-            title = { Text("Felhasználó nem található") },
-            text = { Text("A beolvasott kártya ($registrationUid) nincs regisztrálva. Szeretnéd regisztrálni?") },
-            confirmButton = {
-                TextButton(onClick = {
-                    userToEdit = User(uid = registrationUid, name = "", credit = 0, loan = 0)
-                    showEditDialog = true
-                    onClearRegistrationUid()
-                }) {
-                    Text("Igen")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = onClearRegistrationUid) {
-                    Text("Mégse")
-                }
-            }
-        )
-    }
-
-    if (showEditDialog && userToEdit != null) {
-        EditUserDialog(
-            user = userToEdit!!,
-            onDismiss = {
-                showEditDialog = false
-                userToEdit = null
-            },
-            onSave = { updatedUser ->
-                onUpdateUser(updatedUser)
-                showEditDialog = false
-                userToEdit = null
-            },
-            onDelete = { userToDelete ->
-                onDeleteUser(userToDelete)
-                showEditDialog = false
-                userToEdit = null
-            }
-        )
-    }
-}
-
-@Composable
-fun MachineScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
-    val config by viewModel.machineConfig
-    val successMessage by viewModel.successMessage
-    var priceText by remember(config.price) { mutableStateOf(config.price.toString()) }
-    val keyboardController = LocalSoftwareKeyboardController.current
-    val context = LocalContext.current
 
     LaunchedEffect(successMessage) {
         successMessage?.let {
@@ -568,65 +367,138 @@ fun MachineScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
         }
     }
 
-    Column(
-        modifier = modifier.fillMaxSize().padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(text = "Gép Beállítások", style = MaterialTheme.typography.headlineSmall)
-            Spacer(modifier = Modifier.weight(1f))
-            Button(onClick = { viewModel.logout() }) {
-                Text("Kilépés")
+    Column(modifier = modifier.fillMaxSize()) {
+        NfcWarning(nfcEnabled = nfcEnabled)
+        
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(text = "Felhasználók", style = MaterialTheme.typography.headlineSmall)
+                Spacer(modifier = Modifier.weight(1f))
+                Button(onClick = { viewModel.logout() }) {
+                    Text("Kilépés")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { viewModel.setSearchQuery(it) },
+                label = { Text("Keresés név vagy UID alapján") },
+                modifier = Modifier.fillMaxWidth(),
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.setSearchQuery("") }) {
+                            Icon(Icons.Default.Close, contentDescription = "Törlés")
+                        }
+                    }
+                },
+                singleLine = true
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Button(
+                onClick = { viewModel.fetchAllUsers() },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Lista Frissítése")
             }
         }
 
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = "Ingyenes mód", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                    Switch(
-                        checked = config.free,
-                        onCheckedChange = { viewModel.updateMachineConfig(config.copy(free = it)) }
-                    )
-                }
-                
-                HorizontalDivider()
-                
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(text = "Ár (Kredit)", style = MaterialTheme.typography.titleMedium)
-                    OutlinedTextField(
-                        value = priceText,
-                        onValueChange = { priceText = it },
-                        label = { Text("Egységár") },
-                        modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = {
-                            priceText.toIntOrNull()?.let { 
-                                viewModel.updateMachineConfig(config.copy(price = it))
+        if (isLoading && userList.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .padding(8.dp)
+            ) {
+                Text(text = "Név", modifier = Modifier.weight(1.5f), fontWeight = FontWeight.Bold)
+                Text(text = "Kredit", modifier = Modifier.weight(0.5f), fontWeight = FontWeight.Bold)
+            }
+            HorizontalDivider()
+
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(userList, key = { it.uid ?: it.hashCode() }) { user ->
+                    val isExpanded = expandedUserId == user.uid
+                    Column {
+                        UserRow(
+                            user = user, 
+                            onClick = { 
+                                expandedUserId = if (isExpanded) null else user.uid
                             }
-                            keyboardController?.hide()
-                        }),
-                        singleLine = true
-                    )
-                    
-                    Button(
-                        onClick = { 
-                            priceText.toIntOrNull()?.let { 
-                                viewModel.updateMachineConfig(config.copy(price = it))
+                        )
+                        AnimatedVisibility(
+                            visible = isExpanded,
+                            enter = expandVertically(),
+                            exit = shrinkVertically()
+                        ) {
+                            Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                                UserDetailCard(
+                                    user = user,
+                                    onEditClick = {
+                                        userToEdit = user
+                                    },
+                                    onUpdateCredit = { amount ->
+                                        viewModel.updateCredit(user, amount)
+                                    }
+                                )
                             }
-                            keyboardController?.hide()
-                        },
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        Text("Mentés")
+                        }
+                        HorizontalDivider()
                     }
                 }
             }
         }
+    }
+
+    userToEdit?.let { user ->
+        UserDetailDialog(
+            user = user,
+            onDismiss = { userToEdit = null },
+            onSave = { updatedUser ->
+                viewModel.updateUser(updatedUser)
+                userToEdit = null
+            },
+            onDelete = {
+                viewModel.deleteUser(user)
+                userToEdit = null
+            }
+        )
+    }
+
+    if (registrationUid != null) {
+        UserDetailDialog(
+            user = User(uid = registrationUid, name = "", credit = 0L, loan = 0L),
+            isNewUser = true,
+            onDismiss = { viewModel.clearRegistrationUid() },
+            onSave = { newUser ->
+                viewModel.updateUser(newUser)
+                viewModel.clearRegistrationUid()
+            }
+        )
+    }
+}
+
+@Composable
+fun UserRow(user: User, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = user.name ?: "Névtelen", modifier = Modifier.weight(1.5f), style = MaterialTheme.typography.bodyLarge)
+        Text(text = "${user.creditInt} Ft", modifier = Modifier.weight(0.5f), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -646,30 +518,18 @@ fun UserDetailCard(
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "${user.name ?: "Nincs megadva"}",
-                    style = MaterialTheme.typography.titleMedium,
+                    text = user.name ?: "Névtelen",
+                    style = MaterialTheme.typography.titleSmall, 
                     color = MaterialTheme.colorScheme.primary
                 )
-                Spacer(modifier = Modifier.weight(1f))
-                Text(text = "Hitel: ${user.loanInt}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                 Spacer(modifier = Modifier.weight(1f))
                 IconButton(onClick = onEditClick) {
                     Icon(Icons.Default.Edit, contentDescription = "Szerkesztés")
                 }
             }
+            
             Spacer(modifier = Modifier.height(16.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(text = "Kredit:", fontWeight = FontWeight.Bold, fontSize = 15.sp, textAlign = TextAlign.Center)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(text = "${user.creditInt}",
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontSize = 30.sp,)
-            }
-            Spacer(modifier = Modifier.height(12.dp))
+
             val onUpdate: () -> Unit = {
                 val value = creditAdjustText.toIntOrNull()
                 if (value != null) {
@@ -678,6 +538,7 @@ fun UserDetailCard(
                     keyboardController?.hide()
                 }
             }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -691,14 +552,14 @@ fun UserDetailCard(
                 ) {
                     Text("-500")
                 }
+
                 Spacer(modifier = Modifier.width(4.dp))
+
                 OutlinedTextField(
                     value = creditAdjustText,
-                    onValueChange = { if (it.length <= 10000) creditAdjustText = it },
+                    onValueChange = { if (it.length <= 10) creditAdjustText = it },
                     label = { Text("Összeg") },
-                    modifier = Modifier
-                        .weight(1f)
-                        .widthIn(max = 10000.dp),
+                    modifier = Modifier.weight(1f),
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Number,
                         imeAction = ImeAction.Done
@@ -706,7 +567,9 @@ fun UserDetailCard(
                     keyboardActions = KeyboardActions(onDone = { onUpdate() }),
                     singleLine = true
                 )
+
                 Spacer(modifier = Modifier.width(4.dp))
+
                 Button(
                     onClick = {
                         val current = creditAdjustText.toIntOrNull() ?: 0
@@ -717,7 +580,9 @@ fun UserDetailCard(
                     Text("+500")
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
+
+            Spacer(modifier = Modifier.height(12.dp))
+
             Button(
                 onClick = onUpdate,
                 modifier = Modifier.fillMaxWidth().height(56.dp)
@@ -729,93 +594,76 @@ fun UserDetailCard(
 }
 
 @Composable
-fun EditUserDialog(
+fun UserDetailDialog(
     user: User,
+    isNewUser: Boolean = false,
     onDismiss: () -> Unit,
     onSave: (User) -> Unit,
-    onDelete: (User) -> Unit
+    onDelete: (() -> Unit)? = null
 ) {
-    var uid by remember { mutableStateOf(user.uid ?: "") }
     var name by remember { mutableStateOf(user.name ?: "") }
     var credit by remember { mutableStateOf(user.creditInt.toString()) }
     var loan by remember { mutableStateOf(user.loanInt.toString()) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
-    val keyboardController = LocalSoftwareKeyboardController.current
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Felhasználó szerkesztése") },
+        title = { Text(if (isNewUser) "Új felhasználó regisztrálása" else "Felhasználó szerkesztése") },
         text = {
-            Column {
-                TextField(value = uid, onValueChange = { uid = it }, label = { Text("UID") })
-                Spacer(modifier = Modifier.height(8.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (isNewUser) {
+                    Text("Kártya UID: ${user.uid}", fontWeight = FontWeight.Bold)
+                }
                 TextField(value = name, onValueChange = { name = it }, label = { Text("Név") })
-                Spacer(modifier = Modifier.height(8.dp))
                 TextField(
                     value = credit,
                     onValueChange = { credit = it },
-                    label = { Text("Kredit") },
+                    label = { Text("Kredit (Ft)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
-                Spacer(modifier = Modifier.height(8.dp))
                 TextField(
                     value = loan,
                     onValueChange = { loan = it },
-                    label = { Text("Loan") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() })
+                    label = { Text("Hitel (Ft)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
             }
         },
         confirmButton = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                FilledIconButton(
-                    onClick = { showDeleteConfirm = true },
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Icon(Icons.Default.Delete, contentDescription = "Törlés")
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = onDismiss) {
-                        Text("Mégse")
-                    }
-                    TextButton(onClick = {
-                        onSave(user.copy(
-                            uid = uid,
-                            name = name,
-                            credit = credit.toIntOrNull() ?: 0,
-                            loan = loan.toIntOrNull() ?: 0
-                        ))
-                        keyboardController?.hide()
-                    }) {
-                        Text("Mentés")
-                    }
-                }
+            Button(onClick = {
+                onSave(user.copy(
+                    name = name,
+                    credit = credit.toLongOrNull() ?: 0L,
+                    loan = loan.toLongOrNull() ?: 0L
+                ))
+            }) {
+                Text("Mentés")
             }
         },
-        dismissButton = null
+        dismissButton = {
+            Row {
+                if (!isNewUser && onDelete != null) {
+                    TextButton(onClick = { showDeleteConfirm = true }, colors = ButtonDefaults.textButtonColors(contentColor = Color.Red)) {
+                        Text("Törlés")
+                    }
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Mégse")
+                }
+            }
+        }
     )
 
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             title = { Text("Törlés megerősítése") },
-            text = { Text("Biztosan törölni szeretnéd ezt a felhasználót: ${user.name ?: "Ismeretlen"}?") },
+            text = { Text("Biztosan törölni szeretnéd ezt a felhasználót?") },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        onDelete(user)
-                        showDeleteConfirm = false
-                        keyboardController?.hide()
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                ) {
+                Button(onClick = { 
+                    onDelete?.invoke()
+                    showDeleteConfirm = false
+                }, colors = ButtonDefaults.buttonColors(containerColor = Color.Red)) {
                     Text("Törlés")
                 }
             },
@@ -829,44 +677,99 @@ fun EditUserDialog(
 }
 
 @Composable
-fun UserRow(user: User, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically
+fun MachineScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
+    val config by viewModel.machineConfig
+    val isLoading by viewModel.isLoading
+    val error by viewModel.error
+    val successMessage by viewModel.successMessage
+    val context = LocalContext.current
+
+    LaunchedEffect(successMessage) {
+        successMessage?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.clearSuccessMessage()
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(text = user.name ?: "Névtelen", modifier = Modifier.weight(1.5f))
-        Text(text = "${user.creditInt}", modifier = Modifier.weight(0.5f))
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator()
+                } else {
+                    Text(text = "Beállítások", style = MaterialTheme.typography.titleLarge)
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Ingyen kávé")
+                        Switch(
+                            checked = config.free,
+                            onCheckedChange = { viewModel.updateMachineConfig(config.copy(free = it)) }
+                        )
+                    }
+
+                    PriceSettingItem(
+                        name = "Ár",
+                        price = config.priceInt,
+                        onSave = { newPrice ->
+                            viewModel.updateMachineConfig(config.copy(price = newPrice))
+                        }
+                    )
+
+                    error?.let {
+                        Text(text = it, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        }
     }
 }
 
-@Preview(showBackground = true)
 @Composable
-fun UserListScreenPreview() {
-    val sampleUsers = listOf(
-        User(uid = "1", name = "Teszt Elek", credit = 1500, loan = 0),
-        User(uid = "2", name = "Gipsz Jakab", credit = 200, loan = 500),
-        User(uid = "3", name = "Minta János", credit = 3000, loan = 0)
-    )
-    CoffeeAdminTheme {
-        UserListContent(
-            userList = sampleUsers,
-            searchQuery = "",
-            isLoading = false,
-            error = null,
-            scannedUid = null,
-            registrationUid = null,
-            nfcEnabled = true,
-            onLogout = {},
-            onSearchQueryChange = {},
-            onRefresh = {},
-            onUpdateCredit = { _, _ -> },
-            onUpdateUser = {},
-            onDeleteUser = {},
-            onClearScannedUid = {},
-            onClearRegistrationUid = {}
-        )
+fun PriceSettingItem(name: String, price: Int, onSave: (Long) -> Unit) {
+    var textValue by remember { mutableStateOf(price.toString()) }
+    var isEditing by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(text = name, modifier = Modifier.weight(1f))
+        if (isEditing) {
+            TextField(
+                value = textValue,
+                onValueChange = { textValue = it },
+                modifier = Modifier.width(100.dp),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            )
+            IconButton(onClick = {
+                textValue.toLongOrNull()?.let {
+                    onSave(it)
+                    isEditing = false
+                }
+            }) {
+                Icon(Icons.Default.Check, contentDescription = "Mentés")
+            }
+        } else {
+            Text(text = "$price Ft")
+            IconButton(onClick = { isEditing = true }) {
+                Icon(Icons.Default.Edit, contentDescription = "Szerkesztés")
+            }
+        }
     }
 }
