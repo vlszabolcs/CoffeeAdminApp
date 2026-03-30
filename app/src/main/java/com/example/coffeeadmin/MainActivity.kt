@@ -1,14 +1,20 @@
 package com.example.coffeeadmin
 
+import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.*
+import android.content.pm.PackageManager
 import android.net.*
 import android.nfc.*
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.*
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -30,6 +36,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import com.example.coffeeadmin.ui.theme.CoffeeAdminTheme
 import kotlinx.coroutines.launch
 
@@ -46,6 +55,16 @@ class MainActivity : ComponentActivity() {
     private var isNetworkAvailable = mutableStateOf(true)
     private var isNfcEnabled = mutableStateOf(true)
 
+    private val CHANNEL_ID = "coffee_low_level"
+
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (!isGranted) {
+            Toast.makeText(this, "Értesítések engedélyezése szükséges a riasztásokhoz!", Toast.LENGTH_LONG).show()
+        }
+    }
+
     private lateinit var connectivityManager: ConnectivityManager
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
@@ -60,6 +79,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        createNotificationChannel()
+        checkNotificationPermission()
+
         connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val networkRequest = NetworkRequest.Builder()
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
@@ -86,6 +108,13 @@ class MainActivity : ComponentActivity() {
                 var currentScreen by currentScreenState
                 val hasInternet by isNetworkAvailable
                 val nfcOn by isNfcEnabled
+                val lowCoffeeWarning by viewModel.lowCoffeeWarning
+
+                LaunchedEffect(lowCoffeeWarning) {
+                    lowCoffeeWarning?.let {
+                        sendNotification(it)
+                    }
+                }
 
                 Box(modifier = Modifier.fillMaxSize()) {
                     // Main App Content
@@ -132,9 +161,73 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    // Low Coffee Popup
+                    lowCoffeeWarning?.let { message ->
+                        AlertDialog(
+                            onDismissRequest = { viewModel.clearLowCoffeeWarning() },
+                            title = { 
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Warning, contentDescription = null, tint = Color.Red)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Alacsony kávészint")
+                                }
+                            },
+                            text = { Text(message) },
+                            confirmButton = {
+                                Button(onClick = { viewModel.clearLowCoffeeWarning() }) {
+                                    Text("Értettem")
+                                }
+                            }
+                        )
+                    }
+
                     // Centered Warnings Overlay
                     ConnectivityWarning(hasInternet = hasInternet)
                 }
+            }
+        }
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val name = "Kávészint Riasztás"
+            val descriptionText = "Értesítések az alacsony kávészintről"
+            val importance = NotificationManager.IMPORTANCE_HIGH
+            val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
+                description = descriptionText
+            }
+            val notificationManager: NotificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun checkNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+                PackageManager.PERMISSION_GRANTED) {
+                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+
+    private fun sendNotification(message: String) {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pendingIntent: PendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
+
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground) // Biztosítsd, hogy van ilyen ikonod
+            .setContentTitle("Alacsony kávészint!")
+            .setContentText(message)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+
+        with(NotificationManagerCompat.from(this)) {
+            if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                notify(1, builder.build())
             }
         }
     }
@@ -237,12 +330,12 @@ fun ConnectivityWarning(hasInternet: Boolean) {
 }
 
 @Composable
-fun NfcWarning(nfcEnabled: Boolean) {
+fun NfcWarning(nfcEnabled: Boolean, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    AnimatedVisibility(visible = !nfcEnabled) {
+    AnimatedVisibility(visible = !nfcEnabled, modifier = modifier) {
         Card(
             colors = CardDefaults.cardColors(containerColor = Color(0xFFFFA500)),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
             modifier = Modifier.clickable {
                 try {
                     context.startActivity(Intent(Settings.ACTION_NFC_SETTINGS))
@@ -368,12 +461,16 @@ fun UserListScreen(viewModel: UserViewModel, nfcEnabled: Boolean, modifier: Modi
     }
 
     Column(modifier = modifier.fillMaxSize()) {
-        NfcWarning(nfcEnabled = nfcEnabled)
-        
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(text = "Felhasználók", style = MaterialTheme.typography.headlineSmall)
+                
                 Spacer(modifier = Modifier.weight(1f))
+                
+                NfcWarning(nfcEnabled = nfcEnabled, modifier = Modifier.padding(horizontal = 8.dp))
+                
+                Spacer(modifier = Modifier.weight(1f))
+
                 Button(onClick = { viewModel.logout() }) {
                     Text("Kilépés")
                 }
@@ -428,33 +525,15 @@ fun UserListScreen(viewModel: UserViewModel, nfcEnabled: Boolean, modifier: Modi
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(userList, key = { it.uid ?: it.hashCode() }) { user ->
-                    val isExpanded = expandedUserId == user.uid
-                    Column {
-                        UserRow(
-                            user = user, 
-                            onClick = { 
-                                expandedUserId = if (isExpanded) null else user.uid
-                            }
-                        )
-                        AnimatedVisibility(
-                            visible = isExpanded,
-                            enter = expandVertically(),
-                            exit = shrinkVertically()
-                        ) {
-                            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                                UserDetailCard(
-                                    user = user,
-                                    onEditClick = {
-                                        userToEdit = user
-                                    },
-                                    onUpdateCredit = { amount ->
-                                        viewModel.updateCredit(user, amount)
-                                    }
-                                )
-                            }
-                        }
-                        HorizontalDivider()
-                    }
+                    UserListItem(
+                        user = user,
+                        isExpanded = expandedUserId == user.uid,
+                        onExpandClick = {
+                            expandedUserId = if (expandedUserId == user.uid) null else user.uid
+                        },
+                        onEditClick = { userToEdit = it },
+                        onUpdateCredit = { u, amount -> viewModel.updateCredit(u, amount) }
+                    )
                 }
             }
         }
@@ -489,6 +568,40 @@ fun UserListScreen(viewModel: UserViewModel, nfcEnabled: Boolean, modifier: Modi
 }
 
 @Composable
+fun UserListItem(
+    user: User,
+    isExpanded: Boolean,
+    onExpandClick: () -> Unit,
+    onEditClick: (User) -> Unit,
+    onUpdateCredit: (User, Int) -> Unit
+) {
+    Column {
+        UserRow(
+            user = user, 
+            onClick = onExpandClick
+        )
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = expandVertically(),
+            exit = shrinkVertically()
+        ) {
+            // By wrapping in an if check, we only compose the detail content when expanded.
+            // This can significantly improve performance in long lists.
+            if (isExpanded) {
+                Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                    UserDetailCard(
+                        user = user,
+                        onEditClick = { onEditClick(user) },
+                        onUpdateCredit = { amount -> onUpdateCredit(user, amount) }
+                    )
+                }
+            }
+        }
+        HorizontalDivider()
+    }
+}
+
+@Composable
 fun UserRow(user: User, onClick: () -> Unit) {
     Row(
         modifier = Modifier
@@ -518,7 +631,7 @@ fun UserDetailCard(
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = user.name ?: "Névtelen",
+                    text = "Gyors kredit módosítás",
                     style = MaterialTheme.typography.titleSmall, 
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -679,10 +792,14 @@ fun UserDetailDialog(
 @Composable
 fun MachineScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
     val config by viewModel.machineConfig
+    val income by viewModel.income
+    val coffeeCount by viewModel.coffeeCount
     val isLoading by viewModel.isLoading
     val error by viewModel.error
     val successMessage by viewModel.successMessage
     val context = LocalContext.current
+
+    var showThresholdDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(successMessage) {
         successMessage?.let {
@@ -725,8 +842,32 @@ fun MachineScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
                     PriceSettingItem(
                         name = "Ár",
                         price = config.priceInt,
+                        unit = "Ft",
                         onSave = { newPrice ->
                             viewModel.updateMachineConfig(config.copy(price = newPrice))
+                        }
+                    )
+
+                    PriceSettingItem(
+                        name = "Összes bevétel",
+                        price = income.toInt(),
+                        unit = "Ft",
+                        onSave = { newIncome ->
+                            viewModel.updateIncome(newIncome)
+                        }
+                    )
+
+                    PriceSettingItem(
+                        name = "Kávé készlet",
+                        price = coffeeCount.toInt(),
+                        unit = "kg",
+                        onSave = { newCount ->
+                            viewModel.updateCoffeeCount(newCount)
+                        },
+                        secondaryAction = {
+                            IconButton(onClick = { showThresholdDialog = true }) {
+                                Icon(Icons.Default.Settings, contentDescription = "Küszöbérték módosítása")
+                            }
                         }
                     )
 
@@ -737,10 +878,51 @@ fun MachineScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
             }
         }
     }
+
+    if (showThresholdDialog) {
+        var thresholdValue by remember { mutableStateOf((config.coffeeThreshold ?: 0L).toString()) }
+        AlertDialog(
+            onDismissRequest = { showThresholdDialog = false },
+            title = { Text("Kávé küszöbérték beállítása") },
+            text = {
+                Column {
+                    Text("Add meg azt a mennyiséget (kg), ami alatt az alkalmazás riasztást küld.")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TextField(
+                        value = thresholdValue,
+                        onValueChange = { thresholdValue = it },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    thresholdValue.toLongOrNull()?.let {
+                        viewModel.updateMachineConfig(config.copy(coffeeThreshold = it))
+                        showThresholdDialog = false
+                    }
+                }) {
+                    Text("Mentés")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showThresholdDialog = false }) {
+                    Text("Mégse")
+                }
+            }
+        )
+    }
 }
 
 @Composable
-fun PriceSettingItem(name: String, price: Int, onSave: (Long) -> Unit) {
+fun PriceSettingItem(
+    name: String, 
+    price: Int, 
+    unit: String = "Ft", 
+    onSave: (Long) -> Unit,
+    secondaryAction: @Composable (() -> Unit)? = null
+) {
     var textValue by remember { mutableStateOf(price.toString()) }
     var isEditing by remember { mutableStateOf(false) }
 
@@ -750,6 +932,7 @@ fun PriceSettingItem(name: String, price: Int, onSave: (Long) -> Unit) {
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(text = name, modifier = Modifier.weight(1f))
+        
         if (isEditing) {
             TextField(
                 value = textValue,
@@ -766,9 +949,12 @@ fun PriceSettingItem(name: String, price: Int, onSave: (Long) -> Unit) {
                 Icon(Icons.Default.Check, contentDescription = "Mentés")
             }
         } else {
-            Text(text = "$price Ft")
-            IconButton(onClick = { isEditing = true }) {
-                Icon(Icons.Default.Edit, contentDescription = "Szerkesztés")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(text = "$price $unit")
+                secondaryAction?.invoke()
+                IconButton(onClick = { isEditing = true }) {
+                    Icon(Icons.Default.Edit, contentDescription = "Szerkesztés")
+                }
             }
         }
     }
