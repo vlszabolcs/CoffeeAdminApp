@@ -256,16 +256,16 @@ fun NfcWarning(nfcEnabled: Boolean) {
             }
         ) {
             Row(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.Warning, contentDescription = null, tint = Color.White)
-                Spacer(modifier = Modifier.width(12.dp))
+                Icon(Icons.Default.Warning, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Az NFC nincs bekapcsolva!\nKattints ide a bekapcsoláshoz.",
+                    text = "NFC!",
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
+                    fontSize = 12.sp
                 )
             }
         }
