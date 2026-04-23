@@ -119,6 +119,23 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
         results
     }
 
+    fun getUserChartData(userId: String?): List<DailyStat> {
+        if (userId == null) return emptyList()
+        val cal = Calendar.getInstance()
+        val results = mutableListOf<DailyStat>()
+        
+        for (i in 0..6) {
+            val date = cal.timeInMillis
+            val count = _logList.value.count { 
+                it.userId == userId && it.actionInt == 0 && isSameDay(it.timestamp, date) 
+            }
+            val label = if (i == 0) "Ma" else "${cal.get(Calendar.DAY_OF_MONTH)}."
+            results.add(0, DailyStat(label, count))
+            cal.add(Calendar.DAY_OF_YEAR, -1)
+        }
+        return results
+    }
+
     private fun isSameDay(ts1: Long, ts2: Long): Boolean {
         val d1 = Calendar.getInstance().apply { timeInMillis = if (ts1 > 9999999999L) ts1 else ts1 * 1000 }
         val d2 = Calendar.getInstance().apply { timeInMillis = ts2 }
@@ -394,12 +411,13 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
             }
     }
 
-    fun updateUser(updatedUser: User) {
+    fun updateUser(updatedUser: User, oldUid: String? = null) {
         val uid = updatedUser.uid ?: return
         _isLoading.value = true
         val now = System.currentTimeMillis() / 1000 // Seconds
         
-        val oldUser = _userList.value.find { it.uid == uid }
+        val effectiveOldUid = oldUid ?: uid
+        val oldUser = _userList.value.find { it.uid == effectiveOldUid }
         val creditDiff = if (oldUser != null) {
             updatedUser.creditLong - oldUser.creditLong
         } else {
@@ -415,6 +433,11 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
         
         if (creditDiff != 0L) {
             updates["stat/income"] = ServerValue.increment(creditDiff)
+        }
+
+        // If UID changed, remove old and set new
+        if (oldUid != null && oldUid != uid) {
+            database.child("users").child(oldUid).removeValue()
         }
 
         database.updateChildren(updates)

@@ -1,6 +1,10 @@
 package com.example.coffeeadmin
 
 import android.app.DatePickerDialog
+import android.app.PendingIntent
+import android.content.Intent
+import android.nfc.NfcAdapter
+import android.nfc.Tag
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -35,19 +39,52 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 class MainActivity : ComponentActivity() {
-    private val CHANNEL_ID = "coffee_low_level"
+    private var nfcAdapter: NfcAdapter? = null
+    private var pendingIntent: PendingIntent? = null
+    private lateinit var viewModel: UserViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        nfcAdapter = NfcAdapter.getDefaultAdapter(this)
+        val intent = Intent(this, javaClass).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_MUTABLE)
+
         setContent {
             CoffeeAdminTheme {
-                val viewModel: UserViewModel = viewModel()
+                viewModel = viewModel()
                 val isLoggedIn by viewModel.isLoggedIn
 
                 if (isLoggedIn) {
                     MainScreen(viewModel)
                 } else {
                     LoginScreen(onLogin = { email, pass -> viewModel.login(email, pass) })
+                }
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        nfcAdapter?.enableForegroundDispatch(this, pendingIntent, null, null)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        nfcAdapter?.disableForegroundDispatch(this)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (NfcAdapter.ACTION_TAG_DISCOVERED == intent.action ||
+            NfcAdapter.ACTION_TECH_DISCOVERED == intent.action ||
+            NfcAdapter.ACTION_NDEF_DISCOVERED == intent.action
+        ) {
+            val tag = intent.getParcelableExtra<Tag>(NfcAdapter.EXTRA_TAG)
+            tag?.id?.let { id ->
+                val uid = id.joinToString("") { "%02X".format(it) }
+                if (::viewModel.isInitialized) {
+                    viewModel.searchUserByUid(uid)
                 }
             }
         }
@@ -62,6 +99,7 @@ fun MainScreen(viewModel: UserViewModel) {
     val scannedUid by viewModel.scannedUid
     val scannedUidForRegistration by viewModel.scannedUidForRegistration
     val lowCoffeeWarning by viewModel.lowCoffeeWarning
+    var nfcEditUser by remember { mutableStateOf<User?>(null) }
 
     Scaffold(
         topBar = {
@@ -119,26 +157,43 @@ fun MainScreen(viewModel: UserViewModel) {
         }
     }
 
-    // Handle scanned UID for existing user
+    // Handle scanned UID for existing user - Show Quick Credit View
     scannedUid?.let { uid ->
         val user = viewModel.userList.value.find { it.uid == uid }
         if (user != null) {
-            UserDetailDialog(
+            QuickCreditDialog(
                 user = user,
+                viewModel = viewModel,
                 onDismiss = { viewModel.clearScannedUid() },
-                onSave = { updatedUser ->
-                    viewModel.updateUser(updatedUser)
+                onConfirm = { amount ->
+                    viewModel.updateCredit(user, amount)
                     viewModel.clearScannedUid()
                 },
-                onDelete = {
-                    viewModel.deleteUser(user)
+                onEdit = {
+                    nfcEditUser = user
                     viewModel.clearScannedUid()
                 }
             )
         }
     }
 
-    // Handle scanned UID for new user
+    // Full edit dialog triggered from NFC Fast View
+    nfcEditUser?.let { user ->
+        UserDetailDialog(
+            user = user,
+            onDismiss = { nfcEditUser = null },
+            onSave = { updatedUser ->
+                viewModel.updateUser(updatedUser, oldUid = user.uid)
+                nfcEditUser = null
+            },
+            onDelete = {
+                viewModel.deleteUser(user)
+                nfcEditUser = null
+            }
+        )
+    }
+
+    // Handle scanned UID for new user - Offer registration
     scannedUidForRegistration?.let { uid ->
         UserDetailDialog(
             user = User(uid = uid),
@@ -234,6 +289,7 @@ fun UserListScreen(viewModel: UserViewModel) {
     quickCreditUser?.let { user ->
         QuickCreditDialog(
             user = user,
+            viewModel = viewModel,
             onDismiss = { quickCreditUser = null },
             onConfirm = { amount ->
                 viewModel.updateCredit(user, amount)
@@ -251,7 +307,7 @@ fun UserListScreen(viewModel: UserViewModel) {
             user = user,
             onDismiss = { showEditDialog = null },
             onSave = { updatedUser ->
-                viewModel.updateUser(updatedUser)
+                viewModel.updateUser(updatedUser, oldUid = user.uid)
                 showEditDialog = null
             },
             onDelete = {
@@ -301,6 +357,7 @@ fun UserDetailDialog(
     onSave: (User) -> Unit,
     onDelete: (() -> Unit)? = null
 ) {
+    var uid by remember { mutableStateOf(user.uid ?: "") }
     var name by remember { mutableStateOf(user.name ?: "") }
     var credit by remember { mutableStateOf(user.creditInt.toString()) }
     var loan by remember { mutableStateOf(user.loanInt.toString()) }
@@ -311,9 +368,13 @@ fun UserDetailDialog(
         title = { Text(if (isNewUser) "Új felhasználó regisztrálása" else "Felhasználó szerkesztése") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (isNewUser) {
-                    Text("Kártya UID: ${user.uid}", fontWeight = FontWeight.Bold)
-                }
+                TextField(
+                    value = uid, 
+                    onValueChange = { uid = it }, 
+                    label = { Text("Kártya UID") }, 
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = true
+                )
                 TextField(value = name, onValueChange = { name = it }, label = { Text("Név") }, modifier = Modifier.fillMaxWidth())
                 TextField(
                     value = credit,
@@ -334,6 +395,7 @@ fun UserDetailDialog(
         confirmButton = {
             Button(onClick = {
                 onSave(user.copy(
+                    uid = uid,
                     name = name,
                     credit = credit.toLongOrNull() ?: 0L,
                     loan = loan.toLongOrNull() ?: 0L
@@ -616,8 +678,15 @@ fun LogScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun QuickCreditDialog(user: User, onDismiss: () -> Unit, onConfirm: (Int) -> Unit, onEdit: (() -> Unit)? = null) {
+fun QuickCreditDialog(
+    user: User, 
+    viewModel: UserViewModel,
+    onDismiss: () -> Unit, 
+    onConfirm: (Int) -> Unit, 
+    onEdit: (() -> Unit)? = null
+) {
     var amountText by remember { mutableStateOf("0") }
+    var showStats by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -673,6 +742,13 @@ fun QuickCreditDialog(user: User, onDismiss: () -> Unit, onConfirm: (Int) -> Uni
                         Text("+500")
                     }
                 }
+
+                if (showStats) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Elmúlt 7 nap fogyasztása:", style = MaterialTheme.typography.bodySmall)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    CoffeeChart(data = viewModel.getUserChartData(user.uid))
+                }
             }
         },
         confirmButton = {
@@ -683,7 +759,17 @@ fun QuickCreditDialog(user: User, onDismiss: () -> Unit, onConfirm: (Int) -> Uni
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Mégse") }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { showStats = !showStats }) {
+                    Icon(
+                        imageVector = if (showStats) Icons.Default.ShowChart else Icons.Default.BarChart, 
+                        contentDescription = "Statisztika",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                TextButton(onClick = onDismiss) { Text("Mégse") }
+            }
         }
     )
 }
