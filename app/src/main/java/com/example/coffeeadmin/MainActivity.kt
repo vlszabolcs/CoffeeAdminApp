@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.nfc.NfcAdapter
 import android.nfc.Tag
+import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -19,6 +20,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.filled.ShowChart
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -34,7 +38,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.ViewModelProvider
 import com.example.coffeeadmin.ui.theme.CoffeeAdminTheme
 import java.text.SimpleDateFormat
 import java.util.*
@@ -47,13 +51,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        viewModel = ViewModelProvider(this)[UserViewModel::class.java]
+        
         nfcAdapter = NfcAdapter.getDefaultAdapter(this)
         val intent = Intent(this, javaClass).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
         pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_MUTABLE)
 
         setContent {
             CoffeeAdminTheme {
-                viewModel = viewModel()
                 val isLoggedIn by viewModel.isLoggedIn
 
                 if (isLoggedIn) {
@@ -81,7 +86,12 @@ class MainActivity : ComponentActivity() {
             NfcAdapter.ACTION_TECH_DISCOVERED == intent.action ||
             NfcAdapter.ACTION_NDEF_DISCOVERED == intent.action
         ) {
-            val tag = intent.getParcelableExtra<Tag>(NfcAdapter.EXTRA_TAG)
+            val tag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableExtra(NfcAdapter.EXTRA_TAG, Tag::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableExtra<Tag>(NfcAdapter.EXTRA_TAG)
+            }
             tag?.id?.let { id ->
                 val uid = id.joinToString("") { "%02X".format(it) }
                 if (::viewModel.isInitialized) {
@@ -95,7 +105,7 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(viewModel: UserViewModel) {
-    var selectedTab by remember { mutableStateOf(0) }
+    var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf(
         stringResource(R.string.nav_users),
         stringResource(R.string.nav_machine),
@@ -112,7 +122,7 @@ fun MainScreen(viewModel: UserViewModel) {
                 title = { Text(stringResource(R.string.app_name)) },
                 actions = {
                     IconButton(onClick = { viewModel.logout() }) {
-                        Icon(Icons.Default.ExitToApp, contentDescription = stringResource(R.string.logout))
+                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = stringResource(R.string.logout))
                     }
                 }
             )
@@ -129,7 +139,7 @@ fun MainScreen(viewModel: UserViewModel) {
                                 when (index) {
                                     0 -> Icons.Default.Person
                                     1 -> Icons.Default.Settings
-                                    else -> Icons.Default.List
+                                    else -> Icons.AutoMirrored.Filled.List
                                 },
                                 contentDescription = null
                             )
@@ -257,31 +267,44 @@ fun UserListScreen(viewModel: UserViewModel) {
     val userCoffeeCounts by viewModel.userCoffeeCounts
     var showEditDialog by remember { mutableStateOf<User?>(null) }
     var quickCreditUser by remember { mutableStateOf<User?>(null) }
+    var showAddUserDialog by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TextField(
-            value = searchQuery,
-            onValueChange = { viewModel.setSearchQuery(it) },
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            placeholder = { Text(stringResource(R.string.search_placeholder)) },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            trailingIcon = {
-                if (searchQuery.isNotEmpty()) {
-                    IconButton(onClick = { viewModel.setSearchQuery("") }) {
-                        Icon(Icons.Default.Clear, contentDescription = null)
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextField(
+                value = searchQuery,
+                onValueChange = { viewModel.setSearchQuery(it) },
+                modifier = Modifier.weight(1f),
+                placeholder = { Text(stringResource(R.string.search_placeholder)) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.setSearchQuery("") }) {
+                            Icon(Icons.Default.Clear, contentDescription = null)
+                        }
                     }
                 }
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            FilledIconButton(
+                onClick = { showAddUserDialog = true },
+                modifier = Modifier.size(56.dp)
+            ) {
+                Icon(Icons.Default.PersonAdd, contentDescription = stringResource(R.string.register_user_title))
             }
-        )
+        }
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(users) { user ->
+            items(users, key = { it.uid ?: "" }) { user ->
                 UserRow(
                     user = user,
                     coffeeCount = userCoffeeCounts[user.uid] ?: 0,
@@ -318,6 +341,18 @@ fun UserListScreen(viewModel: UserViewModel) {
             onDelete = {
                 viewModel.deleteUser(user)
                 showEditDialog = null
+            }
+        )
+    }
+
+    if (showAddUserDialog) {
+        UserDetailDialog(
+            user = User(),
+            isNewUser = true,
+            onDismiss = { showAddUserDialog = false },
+            onSave = { newUser ->
+                viewModel.updateUser(newUser)
+                showAddUserDialog = false
             }
         )
     }
@@ -767,7 +802,7 @@ fun QuickCreditDialog(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { showStats = !showStats }) {
                     Icon(
-                        imageVector = if (showStats) Icons.Default.ShowChart else Icons.Default.BarChart, 
+                        imageVector = if (showStats) Icons.AutoMirrored.Filled.ShowChart else Icons.Default.BarChart,
                         contentDescription = stringResource(R.string.stats),
                         tint = MaterialTheme.colorScheme.primary
                     )
