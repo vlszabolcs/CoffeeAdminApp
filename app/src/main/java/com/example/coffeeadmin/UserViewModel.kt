@@ -34,6 +34,7 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
     private val auth = FirebaseAuth.getInstance()
     private val database = FirebaseDatabase.getInstance().reference
     private val logDao = AppDatabase.getDatabase(application).logDao()
+    private val context = application.applicationContext
 
     private val _userList = mutableStateOf<List<User>>(emptyList())
     val userList: State<List<User>> = _userList
@@ -108,11 +109,12 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
     val chartData: State<List<DailyStat>> = derivedStateOf {
         val cal = Calendar.getInstance()
         val results = mutableListOf<DailyStat>()
+        val todayStr = context.getString(R.string.today)
         
         for (i in 0..6) {
             val date = cal.timeInMillis
             val count = _logList.value.count { it.actionInt == 0 && isSameDay(it.timestamp, date) }
-            val label = if (i == 0) "Ma" else "${cal.get(Calendar.DAY_OF_MONTH)}."
+            val label = if (i == 0) todayStr else "${cal.get(Calendar.DAY_OF_MONTH)}."
             results.add(0, DailyStat(label, count))
             cal.add(Calendar.DAY_OF_YEAR, -1)
         }
@@ -123,13 +125,14 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
         if (userId == null) return emptyList()
         val cal = Calendar.getInstance()
         val results = mutableListOf<DailyStat>()
+        val todayStr = context.getString(R.string.today)
         
         for (i in 0..6) {
             val date = cal.timeInMillis
             val count = _logList.value.count { 
                 it.userId == userId && it.actionInt == 0 && isSameDay(it.timestamp, date) 
             }
-            val label = if (i == 0) "Ma" else "${cal.get(Calendar.DAY_OF_MONTH)}."
+            val label = if (i == 0) todayStr else "${cal.get(Calendar.DAY_OF_MONTH)}."
             results.add(0, DailyStat(label, count))
             cal.add(Calendar.DAY_OF_YEAR, -1)
         }
@@ -269,7 +272,7 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
         val current = beans.inStock
         val threshold = beans.threshold
         if (current < threshold) {
-            _lowCoffeeWarning.value = "Alacsony kávészint! Aktuális: $current kg, Küszöb: $threshold kg"
+            _lowCoffeeWarning.value = context.getString(R.string.low_coffee_warning_format, current, threshold)
         } else {
             _lowCoffeeWarning.value = null
         }
@@ -286,20 +289,20 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
     fun updateMachineConfig(config: MachineConfig) {
         database.child("conf").setValue(config)
             .addOnSuccessListener {
-                _successMessage.value = "Sikeresen frissítve!"
+                _successMessage.value = context.getString(R.string.success_updated)
             }
             .addOnFailureListener {
-                _error.value = "Sikertelen gép beállítás frissítés: ${it.message}"
+                _error.value = context.getString(R.string.error_machine_update_format, it.message)
             }
     }
 
     fun updateIncome(value: Long) {
         database.child("stat").child("income").setValue(value)
             .addOnSuccessListener {
-                _successMessage.value = "Bevétel frissítve!"
+                _successMessage.value = context.getString(R.string.success_income_updated)
             }
             .addOnFailureListener {
-                _error.value = "Sikertelen bevétel frissítés: ${it.message}"
+                _error.value = context.getString(R.string.error_income_update_format, it.message)
             }
     }
 
@@ -404,10 +407,10 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
         database.updateChildren(updates)
             .addOnSuccessListener {
                 fetchAllUsers() 
-                _successMessage.value = "Kredit frissítve!"
+                _successMessage.value = context.getString(R.string.success_credit_updated)
             }
             .addOnFailureListener {
-                _error.value = "Sikertelen frissítés: ${it.message}"
+                _error.value = context.getString(R.string.error_update_format, it.message)
             }
     }
 
@@ -444,10 +447,10 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
             .addOnSuccessListener {
                 _isLoading.value = false
                 fetchAllUsers()
-                _successMessage.value = "Felhasználó mentve!"
+                _successMessage.value = context.getString(R.string.success_user_saved)
             }
             .addOnFailureListener {
-                _error.value = "Sikertelen mentés: ${it.message}"
+                _error.value = context.getString(R.string.error_save_format, it.message)
                 _isLoading.value = false
             }
     }
@@ -459,10 +462,10 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
             .addOnSuccessListener {
                 _isLoading.value = false
                 fetchAllUsers()
-                _successMessage.value = "Felhasználó törölve!"
+                _successMessage.value = context.getString(R.string.success_user_deleted)
             }
             .addOnFailureListener {
-                _error.value = "Sikertelen törlés: ${it.message}"
+                _error.value = context.getString(R.string.error_delete_format, it.message)
                 _isLoading.value = false
             }
     }
@@ -473,10 +476,10 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
                 viewModelScope.launch {
                     logDao.deleteAll()
                 }
-                _successMessage.value = "Naplók törölve!"
+                _successMessage.value = context.getString(R.string.success_logs_deleted)
             }
             .addOnFailureListener {
-                _error.value = "Sikertelen napló törlés: ${it.message}"
+                _error.value = context.getString(R.string.error_logs_delete_format, it.message)
             }
     }
 }

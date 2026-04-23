@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -95,7 +96,11 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainScreen(viewModel: UserViewModel) {
     var selectedTab by remember { mutableStateOf(0) }
-    val tabs = listOf("Felhasználók", "Gép", "Napló")
+    val tabs = listOf(
+        stringResource(R.string.nav_users),
+        stringResource(R.string.nav_machine),
+        stringResource(R.string.nav_logs)
+    )
     val scannedUid by viewModel.scannedUid
     val scannedUidForRegistration by viewModel.scannedUidForRegistration
     val lowCoffeeWarning by viewModel.lowCoffeeWarning
@@ -104,10 +109,10 @@ fun MainScreen(viewModel: UserViewModel) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Coffee Admin") },
+                title = { Text(stringResource(R.string.app_name)) },
                 actions = {
                     IconButton(onClick = { viewModel.logout() }) {
-                        Icon(Icons.Default.ExitToApp, contentDescription = "Kijelentkezés")
+                        Icon(Icons.Default.ExitToApp, contentDescription = stringResource(R.string.logout))
                     }
                 }
             )
@@ -145,11 +150,11 @@ fun MainScreen(viewModel: UserViewModel) {
             lowCoffeeWarning?.let { message ->
                 AlertDialog(
                     onDismissRequest = { viewModel.clearLowCoffeeWarning() },
-                    title = { Text("Figyelmeztetés") },
+                    title = { Text(stringResource(R.string.warning)) },
                     text = { Text(message) },
                     confirmButton = {
                         Button(onClick = { viewModel.clearLowCoffeeWarning() }) {
-                            Text("OK")
+                            Text(stringResource(R.string.ok))
                         }
                     }
                 )
@@ -219,19 +224,19 @@ fun LoginScreen(onLogin: (String, String) -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text(text = "Coffee Admin Login", style = MaterialTheme.typography.headlineMedium)
+        Text(text = stringResource(R.string.login_title), style = MaterialTheme.typography.headlineMedium)
         Spacer(modifier = Modifier.height(32.dp))
         TextField(
             value = email,
             onValueChange = { email = it },
-            label = { Text("Email") },
+            label = { Text(stringResource(R.string.email)) },
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(16.dp))
         TextField(
             value = password,
             onValueChange = { password = it },
-            label = { Text("Jelszó") },
+            label = { Text(stringResource(R.string.password)) },
             visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth()
         )
@@ -240,7 +245,7 @@ fun LoginScreen(onLogin: (String, String) -> Unit) {
             onClick = { onLogin(email, password) },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Bejelentkezés")
+            Text(stringResource(R.string.login_button))
         }
     }
 }
@@ -260,7 +265,7 @@ fun UserListScreen(viewModel: UserViewModel) {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            placeholder = { Text("Keresés név vagy UID alapján...") },
+            placeholder = { Text(stringResource(R.string.search_placeholder)) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             trailingIcon = {
                 if (searchQuery.isNotEmpty()) {
@@ -334,15 +339,15 @@ fun UserRow(user: User, coffeeCount: Int, onClick: () -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = user.name ?: "Ismeretlen", style = MaterialTheme.typography.titleMedium)
-                Text(text = "Egyenleg: ${user.creditInt} Ft", style = MaterialTheme.typography.bodyMedium)
+                Text(text = user.name ?: stringResource(R.string.unknown), style = MaterialTheme.typography.titleMedium)
+                Text(text = stringResource(R.string.balance_format, user.creditInt), style = MaterialTheme.typography.bodyMedium)
                 if (user.loanInt > 0) {
-                    Text(text = "Tartozás: ${user.loanInt} Ft", color = Color.Red, style = MaterialTheme.typography.bodySmall)
+                    Text(text = stringResource(R.string.loan_format, user.loanInt), color = Color.Red, style = MaterialTheme.typography.bodySmall)
                 }
             }
             if (coffeeCount > 0) {
                 Badge(containerColor = MaterialTheme.colorScheme.secondaryContainer) {
-                    Text(text = "Összesen: $coffeeCount kávé", modifier = Modifier.padding(4.dp))
+                    Text(text = stringResource(R.string.total_coffee_format, coffeeCount), modifier = Modifier.padding(4.dp))
                 }
             }
         }
@@ -365,28 +370,28 @@ fun UserDetailDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (isNewUser) "Új felhasználó regisztrálása" else "Felhasználó szerkesztése") },
+        title = { Text(if (isNewUser) stringResource(R.string.register_user_title) else stringResource(R.string.edit_user_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextField(
                     value = uid, 
                     onValueChange = { uid = it }, 
-                    label = { Text("Kártya UID") }, 
+                    label = { Text(stringResource(R.string.card_uid)) }, 
                     modifier = Modifier.fillMaxWidth(),
                     enabled = true
                 )
-                TextField(value = name, onValueChange = { name = it }, label = { Text("Név") }, modifier = Modifier.fillMaxWidth())
+                TextField(value = name, onValueChange = { name = it }, label = { Text(stringResource(R.string.name)) }, modifier = Modifier.fillMaxWidth())
                 TextField(
                     value = credit,
                     onValueChange = { credit = it },
-                    label = { Text("Kredit (Ft)") },
+                    label = { Text(stringResource(R.string.credit_label)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
                 )
                 TextField(
                     value = loan,
                     onValueChange = { loan = it },
-                    label = { Text("Hitel (Ft)") },
+                    label = { Text(stringResource(R.string.loan_label)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -401,18 +406,18 @@ fun UserDetailDialog(
                     loan = loan.toLongOrNull() ?: 0L
                 ))
             }) {
-                Text("Mentés")
+                Text(stringResource(R.string.save))
             }
         },
         dismissButton = {
             Row {
                 if (!isNewUser && onDelete != null) {
                     TextButton(onClick = { showDeleteConfirm = true }, colors = ButtonDefaults.textButtonColors(contentColor = Color.Red)) {
-                        Text("Törlés")
+                        Text(stringResource(R.string.delete))
                     }
                 }
                 TextButton(onClick = onDismiss) {
-                    Text("Mégse")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         }
@@ -421,19 +426,19 @@ fun UserDetailDialog(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Törlés megerősítése") },
-            text = { Text("Biztosan törölni szeretnéd ezt a felhasználót?") },
+            title = { Text(stringResource(R.string.confirm_delete_title)) },
+            text = { Text(stringResource(R.string.confirm_delete_user_message)) },
             confirmButton = {
                 Button(onClick = { 
                     onDelete?.invoke()
                     showDeleteConfirm = false
                 }, colors = ButtonDefaults.buttonColors(containerColor = Color.Red)) {
-                    Text("Törlés")
+                    Text(stringResource(R.string.delete))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("Mégse")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )
@@ -476,14 +481,14 @@ fun MachineScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
                 if (isLoading) {
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
                 } else {
-                    Text(text = "Beállítások", style = MaterialTheme.typography.titleLarge)
+                    Text(text = stringResource(R.string.settings_title), style = MaterialTheme.typography.titleLarge)
                     
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Ingyen kávé")
+                        Text(stringResource(R.string.free_coffee))
                         Switch(
                             checked = config.free,
                             onCheckedChange = { viewModel.updateMachineConfig(config.copy(free = it)) }
@@ -491,30 +496,30 @@ fun MachineScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
                     }
 
                     NumberSettingItem(
-                        name = "Adag ár",
+                        name = stringResource(R.string.portion_price),
                         value = config.priceInt.toDouble(),
-                        unit = "Ft",
+                        unit = stringResource(R.string.currency_unit),
                         onSave = { newValue ->
                             viewModel.updateMachineConfig(config.copy(price = newValue.toLong()))
                         }
                     )
 
                     NumberSettingItem(
-                        name = "Összes bevétel",
+                        name = stringResource(R.string.total_income),
                         value = income.toDouble(),
-                        unit = "Ft",
+                        unit = stringResource(R.string.currency_unit),
                         onSave = { newValue ->
                             viewModel.updateIncome(newValue.toLong())
                         }
                     )
 
-                    Divider()
-                    Text(text = "Kávébab készlet", style = MaterialTheme.typography.titleMedium)
+                    HorizontalDivider()
+                    Text(text = stringResource(R.string.coffee_bean_stock), style = MaterialTheme.typography.titleMedium)
 
                     NumberSettingItem(
-                        name = "Készleten",
+                        name = stringResource(R.string.in_stock),
                         value = config.coffeeBeans.inStock,
-                        unit = "kg",
+                        unit = stringResource(R.string.kg_unit),
                         onSave = { newValue ->
                             viewModel.updateMachineConfig(
                                 config.copy(coffeeBeans = config.coffeeBeans.copy(inStock = newValue))
@@ -522,15 +527,15 @@ fun MachineScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
                         },
                         secondaryAction = {
                             IconButton(onClick = { showThresholdDialog = true }) {
-                                Icon(Icons.Default.Settings, contentDescription = "Küszöbérték módosítása")
+                                Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.edit_threshold))
                             }
                         }
                     )
 
                     NumberSettingItem(
-                        name = "Kg egységár",
+                        name = stringResource(R.string.kg_unit_price),
                         value = config.coffeeBeans.price,
-                        unit = "Ft",
+                        unit = stringResource(R.string.currency_unit),
                         onSave = { newValue ->
                             viewModel.updateMachineConfig(
                                 config.copy(coffeeBeans = config.coffeeBeans.copy(price = newValue))
@@ -550,10 +555,10 @@ fun MachineScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
         var thresholdValue by remember { mutableStateOf(config.coffeeBeans.threshold.toString()) }
         AlertDialog(
             onDismissRequest = { showThresholdDialog = false },
-            title = { Text("Kávé küszöbérték beállítása") },
+            title = { Text(stringResource(R.string.set_coffee_threshold_title)) },
             text = {
                 Column {
-                    Text("Add meg azt a mennyiséget (kg), ami alatt az alkalmazás riasztást küld.")
+                    Text(stringResource(R.string.set_threshold_message))
                     Spacer(modifier = Modifier.height(8.dp))
                     TextField(
                         value = thresholdValue,
@@ -572,12 +577,12 @@ fun MachineScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
                         showThresholdDialog = false
                     }
                 }) {
-                    Text("Mentés")
+                    Text(stringResource(R.string.save))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showThresholdDialog = false }) {
-                    Text("Mégse")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )
@@ -601,7 +606,7 @@ fun LogScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(text = "Fogyasztás az utolsó 7 napban", style = MaterialTheme.typography.titleMedium)
+                Text(text = stringResource(R.string.consumption_last_7_days), style = MaterialTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(16.dp))
                 CoffeeChart(data = chartData)
             }
@@ -614,9 +619,9 @@ fun LogScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column {
-                Text(text = "Dátum szerinti összesítő", style = MaterialTheme.typography.titleLarge)
+                Text(text = stringResource(R.string.date_summary), style = MaterialTheme.typography.titleLarge)
                 Text(
-                    text = if (selectedDate == null) "Mindenkori" else dateFormatter.format(Date(selectedDate!!)),
+                    text = if (selectedDate == null) stringResource(R.string.all_time) else dateFormatter.format(Date(selectedDate!!)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.clickable {
@@ -634,11 +639,11 @@ fun LogScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
             Row {
                 if (selectedDate != null) {
                     IconButton(onClick = { viewModel.setSelectedDate(null) }) {
-                        Icon(Icons.Default.Close, contentDescription = "Szűrő törlése")
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear_filter))
                     }
                 }
                 IconButton(onClick = { showDeleteConfirm = true }) {
-                    Icon(Icons.Default.Delete, contentDescription = "Naplók törlése", tint = Color.Red)
+                    Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.delete_logs), tint = Color.Red)
                 }
             }
         }
@@ -649,7 +654,7 @@ fun LogScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
             }
         } else {
             Box(modifier = Modifier.height(100.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Text("Válassz dátumot a statisztikákhoz")
+                Text(stringResource(R.string.select_date_for_stats))
             }
         }
         Spacer(modifier = Modifier.height(16.dp))
@@ -658,19 +663,19 @@ fun LogScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Naplók törlése") },
-            text = { Text("Biztosan törölni szeretnéd az összes naplóbejegyzést?") },
+            title = { Text(stringResource(R.string.delete_logs)) },
+            text = { Text(stringResource(R.string.confirm_delete_logs_message)) },
             confirmButton = {
                 Button(onClick = { 
                     viewModel.deleteLogs()
                     showDeleteConfirm = false
                 }, colors = ButtonDefaults.buttonColors(containerColor = Color.Red)) {
-                    Text("Törlés")
+                    Text(stringResource(R.string.delete))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("Mégse")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )
@@ -695,14 +700,14 @@ fun QuickCreditDialog(
                 Text("${user.name}")
                 if (onEdit != null) {
                     IconButton(onClick = onEdit) {
-                        Icon(Icons.Default.Edit, contentDescription = "Szerkesztés")
+                        Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.edit))
                     }
                 }
             }
         },
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                Text("Jelenlegi egyenleg: ${user.creditInt} Ft")
+                Text(stringResource(R.string.current_balance_format, user.creditInt))
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 Row(
@@ -745,7 +750,7 @@ fun QuickCreditDialog(
 
                 if (showStats) {
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text("Elmúlt 7 nap fogyasztása:", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.past_7_days_consumption), style = MaterialTheme.typography.bodySmall)
                     Spacer(modifier = Modifier.height(8.dp))
                     CoffeeChart(data = viewModel.getUserChartData(user.uid))
                 }
@@ -755,7 +760,7 @@ fun QuickCreditDialog(
             Button(onClick = {
                 amountText.toIntOrNull()?.let { onConfirm(it) }
             }) {
-                Text("Mentés")
+                Text(stringResource(R.string.save))
             }
         },
         dismissButton = {
@@ -763,12 +768,12 @@ fun QuickCreditDialog(
                 IconButton(onClick = { showStats = !showStats }) {
                     Icon(
                         imageVector = if (showStats) Icons.Default.ShowChart else Icons.Default.BarChart, 
-                        contentDescription = "Statisztika",
+                        contentDescription = stringResource(R.string.stats),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                TextButton(onClick = onDismiss) { Text("Mégse") }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
             }
         }
     )
@@ -777,6 +782,7 @@ fun QuickCreditDialog(
 @Composable
 fun CoffeeChart(data: List<DailyStat>) {
     val maxCount = (data.maxOfOrNull { it.count } ?: 5).coerceAtLeast(1)
+    val todayLabel = stringResource(R.string.today)
     
     Row(
         modifier = Modifier.fillMaxWidth().height(150.dp).padding(horizontal = 8.dp),
@@ -794,7 +800,7 @@ fun CoffeeChart(data: List<DailyStat>) {
                         .fillMaxWidth(0.6f)
                         .fillMaxHeight(barHeightFactor)
                         .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                        .background(if (stat.dateLabel == "Ma") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary)
+                        .background(if (stat.dateLabel == todayLabel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary)
                 )
                 Text(text = stat.count.toString(), fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 Text(text = stat.dateLabel, fontSize = 8.sp)
@@ -842,14 +848,14 @@ fun NumberSettingItem(
                     isEditing = false
                 }
             }) {
-                Icon(Icons.Default.Check, contentDescription = "Mentés")
+                Icon(Icons.Default.Check, contentDescription = stringResource(R.string.save))
             }
         } else {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(text = "${if (value % 1 == 0.0) value.toLong() else value} $unit")
                 secondaryAction?.invoke()
                 IconButton(onClick = { isEditing = true }) {
-                    Icon(Icons.Default.Edit, contentDescription = "Szerkesztés")
+                    Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.edit))
                 }
             }
         }
