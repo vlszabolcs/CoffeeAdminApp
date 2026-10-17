@@ -11,16 +11,17 @@ import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.MutableData
+import com.google.firebase.database.Query
 import com.google.firebase.database.ServerValue
 import com.google.firebase.database.Transaction
 import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.getValue
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collectLatest
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
-import java.util.Locale
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 data class UserLogStat(
     val userId: String,
@@ -41,17 +42,24 @@ data class DeviceEvent(
     val detail: String
 )
 
+// Offline cache: the listeners only download changes and the last state is shown at once on start.
+// It must be enabled before the first use of the database, once per process.
+private val firebaseDatabase: FirebaseDatabase by lazy {
+    FirebaseDatabase.getInstance().apply { setPersistenceEnabled(true) }
+}
+
 class UserViewModel(application: Application) : AndroidViewModel(application) {
     companion object {
         private const val DEVICE_EVENT_LIMIT = 50
     }
 
-    private val dayKeyFormat = SimpleDateFormat("yyyyMMdd", Locale.US)
-
     private val auth = FirebaseAuth.getInstance()
-    private val database = FirebaseDatabase.getInstance().reference
+    private val database = firebaseDatabase.reference
     private val logDao = AppDatabase.getDatabase(application).logDao()
     private val context = application.applicationContext
+
+    // live listeners while logged in: removed on logout, so a new login does not register them twice
+    private val activeListeners = mutableListOf<Pair<Query, ValueEventListener>>()
 
     private val _userList = mutableStateOf<List<User>>(emptyList())
     val userList: State<List<User>> = _userList
@@ -102,31 +110,35 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
     val userCoffeeCounts: State<Map<String, Int>> = derivedStateOf {
         _logList.value
             .filter { it.userId.isNotEmpty() && it.actionInt == CreditLog.ACTION_PURCHASE }
-            .groupBy { it.userId }
-            .mapValues { it.value.size }
+            .groupingBy { it.userId }
+            .eachCount()
+    }
+
+    // purchases per day (epoch day), computed once per log change for the chart
+    private val purchasesByDay: State<Map<Long, Int>> = derivedStateOf {
+        _logList.value
+            .filter { it.actionInt == CreditLog.ACTION_PURCHASE }
+            .groupingBy { epochDay(it.timestamp) }
+            .eachCount()
     }
 
     // ÚJ: Szűrt statisztika a napló nézethez
     val logStats: State<List<UserLogStat>> = derivedStateOf {
-        val users = _userList.value
-        val selected = _selectedDate.value
-        
+        val namesByUid = _userList.value.associate { it.uid to it.name }
+        val selectedDay = _selectedDate.value?.let { epochDay(it) }
+
         val perUser = _logList.value
-            .filter { it.userId.isNotEmpty() }
-            .filter { entry ->
-                if (selected == null) true
-                else isSameDay(entry.timestamp, selected)
-            }
+            .filter { it.userId.isNotEmpty() && (selectedDay == null || epochDay(it.timestamp) == selectedDay) }
             .groupBy { it.userId }
             .map { (uid, logs) ->
-                val name = users.find { it.uid == uid }?.name ?: uid
+                val name = namesByUid[uid] ?: uid
                 val coffeeCount = logs.count { it.actionInt == CreditLog.ACTION_PURCHASE }
                 val lastAction = logs.maxOfOrNull { it.timestamp } ?: 0L
                 UserLogStat(uid, name, coffeeCount, lastAction)
             }
 
         // free-mode purchases are not tied to a user: one extra row from /stat/free
-        val freeCount = if (selected == null) _freeStats.value.values.sum() else freeCountOn(selected)
+        val freeCount = if (selectedDay == null) _freeStats.value.values.sum() else freeCountOn(LocalDate.ofEpochDay(selectedDay))
         val freeRow = UserLogStat("", context.getString(R.string.free_coffee), freeCount, 0L)
 
         (perUser + freeRow)
@@ -136,47 +148,34 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
 
     // ÚJ: Adatok a grafikonhoz (utolsó 7 nap)
     val chartData: State<List<DailyStat>> = derivedStateOf {
-        val cal = Calendar.getInstance()
-        val results = mutableListOf<DailyStat>()
-        val todayStr = context.getString(R.string.today)
-        
-        for (i in 0..6) {
-            val date = cal.timeInMillis
-            val count = _logList.value.count { it.actionInt == CreditLog.ACTION_PURCHASE && isSameDay(it.timestamp, date) } +
-                freeCountOn(date)
-            val label = if (i == 0) todayStr else "${cal.get(Calendar.DAY_OF_MONTH)}."
-            results.add(0, DailyStat(label, count))
-            cal.add(Calendar.DAY_OF_YEAR, -1)
-        }
-        results
+        val perDay = purchasesByDay.value
+        lastSevenDays().map { day -> DailyStat(dayLabel(day), (perDay[day.toEpochDay()] ?: 0) + freeCountOn(day)) }
     }
 
     fun getUserChartData(userId: String?): List<DailyStat> {
         if (userId == null) return emptyList()
-        val cal = Calendar.getInstance()
-        val results = mutableListOf<DailyStat>()
-        val todayStr = context.getString(R.string.today)
-        
-        for (i in 0..6) {
-            val date = cal.timeInMillis
-            val count = _logList.value.count { 
-                it.userId == userId && it.actionInt == CreditLog.ACTION_PURCHASE && isSameDay(it.timestamp, date)
-            }
-            val label = if (i == 0) todayStr else "${cal.get(Calendar.DAY_OF_MONTH)}."
-            results.add(0, DailyStat(label, count))
-            cal.add(Calendar.DAY_OF_YEAR, -1)
-        }
-        return results
+        val perDay = _logList.value
+            .filter { it.userId == userId && it.actionInt == CreditLog.ACTION_PURCHASE }
+            .groupingBy { epochDay(it.timestamp) }
+            .eachCount()
+        return lastSevenDays().map { day -> DailyStat(dayLabel(day), perDay[day.toEpochDay()] ?: 0) }
     }
 
-    private fun freeCountOn(dateMillis: Long): Int =
-        _freeStats.value[dayKeyFormat.format(Date(dateMillis))] ?: 0
+    private fun lastSevenDays(): List<LocalDate> {
+        val today = LocalDate.now()
+        return (6 downTo 0).map { today.minusDays(it.toLong()) }
+    }
 
-    private fun isSameDay(ts1: Long, ts2: Long): Boolean {
-        val d1 = Calendar.getInstance().apply { timeInMillis = if (ts1 > 9999999999L) ts1 else ts1 * 1000 }
-        val d2 = Calendar.getInstance().apply { timeInMillis = ts2 }
-        return d1.get(Calendar.YEAR) == d2.get(Calendar.YEAR) &&
-               d1.get(Calendar.DAY_OF_YEAR) == d2.get(Calendar.DAY_OF_YEAR)
+    private fun dayLabel(day: LocalDate): String =
+        if (day == LocalDate.now()) context.getString(R.string.today) else "${day.dayOfMonth}."
+
+    private fun freeCountOn(day: LocalDate): Int =
+        _freeStats.value[day.format(DateTimeFormatter.BASIC_ISO_DATE)] ?: 0
+
+    // log timestamps are epoch seconds, the date picker gives milliseconds
+    private fun epochDay(timestamp: Long): Long {
+        val millis = if (timestamp > 9999999999L) timestamp else timestamp * 1000
+        return Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate().toEpochDay()
     }
 
     fun setSelectedDate(timestamp: Long?) {
@@ -225,76 +224,93 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun startListening() {
-        fetchAllUsers()
+        if (activeListeners.isNotEmpty()) return
+        listenToUsers()
         listenToMachineConfig()
         listenToIncome()
         listenToFreeStats()
         listenToDeviceEvents()
     }
 
-    private fun listenToMachineConfig() {
-        database.child("conf").addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val config = snapshot.getValue<MachineConfig>()
-                if (config != null) {
-                    _machineConfig.value = config
-                    checkCoffeeLevel()
-                }
-            }
+    private fun stopListening() {
+        activeListeners.forEach { (query, listener) -> query.removeEventListener(listener) }
+        activeListeners.clear()
+    }
+
+    override fun onCleared() {
+        stopListening()
+    }
+
+    private fun listen(query: Query, onData: (DataSnapshot) -> Unit) {
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) = onData(snapshot)
 
             override fun onCancelled(error: DatabaseError) {
                 _error.value = error.message
+                _isLoading.value = false
             }
-        })
+        }
+        query.addValueEventListener(listener)
+        activeListeners += query to listener
+    }
+
+    // live user list: purchases of the machine and changes of this app show up without reloading
+    private fun listenToUsers() {
+        _isLoading.value = true
+        listen(database.child("users")) { snapshot ->
+            val users = mutableListOf<User>()
+            val logs = mutableMapOf<String, Map<Long, Long>>()
+            snapshot.children.forEach { child ->
+                val uid = child.key ?: return@forEach
+                val user = child.getValue<User>()
+                if (user != null) {
+                    val log = readCreditLog(child.child("log"))
+                    logs[uid] = log
+                    users.add(user.copy(uid = uid, lastLog = log.keys.maxOrNull() ?: 0L))
+                }
+            }
+            _userList.value = users
+            _isLoading.value = false
+            syncLogCache(logs)
+        }
+    }
+
+    private fun listenToMachineConfig() {
+        listen(database.child("conf")) { snapshot ->
+            val config = snapshot.getValue<MachineConfig>()
+            if (config != null) {
+                _machineConfig.value = config
+                checkCoffeeLevel()
+            }
+        }
     }
 
     private fun listenToIncome() {
-        database.child("stat").child("income").addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                _income.value = snapshot.getValue<Long>() ?: 0L
-            }
-
-            override fun onCancelled(error: DatabaseError) {
-                _error.value = error.message
-            }
-        })
+        listen(database.child("stat").child("income")) { snapshot ->
+            _income.value = snapshot.getValue<Long>() ?: 0L
+        }
     }
 
     private fun listenToFreeStats() {
-        database.child("stat").child("free").addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                _freeStats.value = snapshot.children.mapNotNull { child ->
-                    val day = child.key ?: return@mapNotNull null
-                    val count = (child.value as? Number)?.toInt() ?: return@mapNotNull null
-                    day to count
-                }.toMap()
-            }
-
-            override fun onCancelled(error: DatabaseError) {
-                _error.value = error.message
-            }
-        })
+        listen(database.child("stat").child("free")) { snapshot ->
+            _freeStats.value = snapshot.children.mapNotNull { child ->
+                val day = child.key ?: return@mapNotNull null
+                val count = (child.value as? Number)?.toInt() ?: return@mapNotNull null
+                day to count
+            }.toMap()
+        }
     }
 
     // /Log is the device status log since the brewpass firmware (purchases are under users/<UID>/log)
     private fun listenToDeviceEvents() {
-        database.child("Log")
-            .orderByKey()
-            .limitToLast(DEVICE_EVENT_LIMIT)
-            .addValueEventListener(object : ValueEventListener {
-                override fun onDataChange(snapshot: DataSnapshot) {
-                    _deviceEvents.value = snapshot.children.mapNotNull { child ->
-                        val timestamp = child.key?.toLongOrNull() ?: return@mapNotNull null
-                        // older entries in the old purchase format have no "e" field
-                        val event = child.child("e").value?.toString() ?: return@mapNotNull null
-                        DeviceEvent(timestamp, event, child.child("d").value?.toString() ?: "")
-                    }.sortedByDescending { it.timestamp }
-                }
-
-                override fun onCancelled(error: DatabaseError) {
-                    _error.value = error.message
-                }
-            })
+        listen(database.child("Log").orderByKey().limitToLast(DEVICE_EVENT_LIMIT)) { snapshot ->
+            _deviceEvents.value = snapshot.children.mapNotNull { child ->
+                val timestamp = child.key?.toLongOrNull() ?: return@mapNotNull null
+                // older entries in the old purchase format have no "e" field
+                val event = child.child("e").value?.toString() ?: return@mapNotNull null
+                DeviceEvent(timestamp, event, child.child("d").value?.toString() ?: "")
+            }.sortedByDescending { it.timestamp }
+        }
     }
 
     private fun checkCoffeeLevel() {
@@ -371,6 +387,7 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun logout() {
+        stopListening()
         auth.signOut()
         _isLoggedIn.value = false
         _userList.value = emptyList()
@@ -388,33 +405,6 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
         _scannedUidForRegistration.value = null
     }
 
-    fun fetchAllUsers() {
-        _isLoading.value = true
-        _error.value = null
-        
-        database.child("users").get()
-            .addOnSuccessListener { snapshot ->
-                val users = mutableListOf<User>()
-                val logs = mutableMapOf<String, Map<Long, Long>>()
-                snapshot.children.forEach { child ->
-                    val uid = child.key ?: return@forEach
-                    val user = child.getValue<User>()
-                    if (user != null) {
-                        val log = readCreditLog(child.child("log"))
-                        logs[uid] = log
-                        users.add(user.copy(uid = uid, lastLog = log.keys.maxOrNull() ?: 0L))
-                    }
-                }
-                _userList.value = users
-                _isLoading.value = false
-                syncLogCache(logs)
-            }
-            .addOnFailureListener { exception ->
-                _error.value = exception.message
-                _isLoading.value = false
-            }
-    }
-
     private fun readCreditLog(log: DataSnapshot): Map<Long, Long> =
         log.children.mapNotNull { entry ->
             val timestamp = entry.key?.toLongOrNull() ?: return@mapNotNull null
@@ -422,13 +412,16 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
             timestamp to credit
         }.toMap()
 
-    // users/<UID>/log -> local Room cache (the statistics are computed from the cache)
+    // users/<UID>/log -> local Room cache (the statistics are computed from the cache).
+    // Only the entries newer than the last cached one of the user are classified and written.
     private fun syncLogCache(logs: Map<String, Map<Long, Long>>) {
         viewModelScope.launch {
+            val latest = logDao.getLatestPerUser().associateBy { it.userId }
             val entries = logs.flatMap { (uid, log) ->
-                if (log.isEmpty()) return@flatMap emptyList()
-                val previous = logDao.getCreditBefore(uid, log.keys.min())
-                CreditLog.toEntries(uid, log, previous)
+                val last = latest[uid]
+                val newLog = if (last == null) log else log.filterKeys { it > last.timestamp }
+                if (newLog.isEmpty()) return@flatMap emptyList()
+                CreditLog.toEntries(uid, newLog, last?.remainingCredit)
             }
             if (entries.isNotEmpty()) {
                 logDao.insertLogs(entries)
@@ -505,7 +498,6 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
                     if (snapshot.exists()) {
                         _scannedUid.value = uid
                         _scannedUidForRegistration.value = null
-                        fetchAllUsers() 
                     } else {
                         _scannedUidForRegistration.value = uid
                         _scannedUid.value = null
@@ -530,7 +522,6 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
             newCredit = { current -> current + amount },
             onSuccess = { delta ->
                 addIncome(delta)
-                fetchAllUsers()
                 _successMessage.value = context.getString(R.string.success_credit_updated)
             },
             onFailure = {
@@ -549,7 +540,6 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
         val onSuccess: (Long) -> Unit = { delta ->
             addIncome(delta)
             _isLoading.value = false
-            fetchAllUsers()
             _successMessage.value = context.getString(R.string.success_user_saved)
         }
         val onFailure: (String?) -> Unit = {
@@ -609,7 +599,6 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
         database.child("users").child(uid).removeValue()
             .addOnSuccessListener {
                 _isLoading.value = false
-                fetchAllUsers()
                 _successMessage.value = context.getString(R.string.success_user_deleted)
             }
             .addOnFailureListener {

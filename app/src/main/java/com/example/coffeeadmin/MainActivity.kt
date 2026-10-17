@@ -636,8 +636,8 @@ fun LogScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
     
     val dateFormatter = remember { SimpleDateFormat("yyyy.MM.dd.", Locale.getDefault()) }
 
-    Column(modifier = modifier.fillMaxSize()) {
-        Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+    LazyColumn(modifier = modifier.fillMaxSize()) {
+        item {
             // Grafikon Szekció
             Card(
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -685,23 +685,31 @@ fun LogScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
                     }
                 }
             }
+        }
 
-            if (isLoading) {
+        if (isLoading) {
+            item {
                 Box(modifier = Modifier.height(200.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
-            } else if (logStats.isEmpty()) {
+            }
+        } else if (logStats.isEmpty()) {
+            item {
                 Box(modifier = Modifier.height(100.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Text(stringResource(R.string.select_date_for_stats))
                 }
-            } else {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    logStats.forEach { stat ->
-                        LogStatRow(stat)
-                    }
+            }
+        } else {
+            item { Spacer(modifier = Modifier.height(8.dp)) }
+            items(logStats, key = { it.userId }) { stat ->
+                Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    LogStatRow(stat)
                 }
             }
+            item { Spacer(modifier = Modifier.height(8.dp)) }
+        }
 
+        item {
             DeviceEventsCard(events = deviceEvents)
             Spacer(modifier = Modifier.height(16.dp))
         }
@@ -799,6 +807,7 @@ fun QuickCreditDialog(
 ) {
     var amountText by remember { mutableStateOf("0") }
     var showStats by remember { mutableStateOf(false) }
+    val logList by viewModel.logList
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -859,7 +868,8 @@ fun QuickCreditDialog(
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(stringResource(R.string.past_7_days_consumption), style = MaterialTheme.typography.bodySmall)
                     Spacer(modifier = Modifier.height(8.dp))
-                    CoffeeChart(data = viewModel.getUserChartData(user.uid))
+                    val userChartData = remember(user.uid, logList) { viewModel.getUserChartData(user.uid) }
+                    CoffeeChart(data = userChartData)
                 }
             }
         },
