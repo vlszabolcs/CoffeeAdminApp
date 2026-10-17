@@ -3,6 +3,7 @@ package com.example.coffee.userview.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -48,7 +49,9 @@ import com.example.coffee.userview.stats.UsageStats
 @Composable
 fun UserScreen(
     cardUid: String,
-    onClose: () -> Unit,
+    /** null: no close button (the standalone user app, where this is the main screen) */
+    onClose: (() -> Unit)?,
+    actions: @Composable RowScope.() -> Unit = {},
     repository: UserViewRepository = remember { UserViewRepository() },
     vendRepository: RemoteVendRepository = remember { RemoteVendRepository(machineId = repository.machineId) }
 ) {
@@ -63,10 +66,13 @@ fun UserScreen(
             TopAppBar(
                 title = { Text(title) },
                 navigationIcon = {
-                    IconButton(onClick = onClose) {
-                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.uv_close))
+                    if (onClose != null) {
+                        IconButton(onClick = onClose) {
+                            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.uv_close))
+                        }
                     }
-                }
+                },
+                actions = actions
             )
         }
     ) { padding ->

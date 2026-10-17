@@ -23,3 +23,12 @@ The structure follows the BrewPass firmware:
 - Log keys are epoch seconds and strictly increasing per user.
 - The statistics are computed from a local Room cache of `users/*/log` plus `/stat/free`.
 - `/conf` is only patched field by field, never overwritten.
+
+## User app (`userapp`)
+
+A separate app for coffee drinkers, built from the same repository: `./gradlew :userapp:installDebug`.
+
+- The phone reads the coffee card by NFC once and keeps that one card; a new card replaces it after confirmation. The app never registers or changes a user, an unknown card gets "ask the administrator".
+- It signs in with Firebase **Anonymous** auth (enable it in the console), so under the database rules it can read only `users/<UID>`, `conf` and `remote/...`.
+- The screen is the `userview` module's `UserScreen`: credit, log, statistics and "Kávét kérek" (virtual card tap on machine `machine1`).
+- Package `com.example.coffeeui`, registered in the TEST project (`userapp/google-services.json`). For production, add this package to `coffeegg-a4840` and replace the file.

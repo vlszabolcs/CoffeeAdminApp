@@ -1,0 +1,19 @@
+<resources>
+    <string name="app_name">CoffeeApp</string>
+    <string name="ua_sign_in_failed">Nem sikerült csatlakozni a szerverhez: %1$s</string>
+    <string name="ua_retry">Újra</string>
+    <string name="ua_tap_card">Érintsd a kávékártyádat a telefon hátához</string>
+    <string name="ua_one_card">Az app egy kártyát tárol. Új kártya a régi helyére kerül.</string>
+    <string name="ua_checking">%1$s kártya ellenőrzése…</string>
+    <string name="ua_not_registered">A(z) %1$s kártya nincs regisztrálva. Keresd az adminisztrátort.</string>
+    <string name="ua_check_failed">Nem sikerült ellenőrizni a kártyát: %1$s</string>
+    <string name="ua_try_again">Újrapróbálom</string>
+    <string name="ua_nfc_missing">Ebben a telefonban nincs NFC, így kártyát nem tud olvasni.</string>
+    <string name="ua_nfc_disabled">Kapcsold be az NFC-t a kártya beolvasásához.</string>
+    <string name="ua_nfc_settings">NFC beállítások</string>
+    <string name="ua_replace_card">Kártya cseréje</string>
+    <string name="ua_replace_title">Lecseréled a kártyát?</string>
+    <string name="ua_replace_text">%1$s törlődik erről a telefonról, és helyette %2$s látszik.</string>
+    <string name="ua_replace_confirm">Csere</string>
+    <string name="ua_cancel">Mégse</string>
+</resources>
