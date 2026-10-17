@@ -52,6 +52,8 @@ fun UserScreen(
     /** null: no close button (the standalone user app, where this is the main screen) */
     onClose: (() -> Unit)?,
     actions: @Composable RowScope.() -> Unit = {},
+    /** title while the user has no name; the standalone user app passes its own so the UID is never shown */
+    untitled: String = cardUid,
     repository: UserViewRepository = remember { UserViewRepository() },
     vendRepository: RemoteVendRepository = remember { RemoteVendRepository(machineId = repository.machineId) }
 ) {
@@ -59,7 +61,7 @@ fun UserScreen(
     val config by remember { repository.observeConfig() }.collectAsState(initial = null)
     val presence by remember { repository.observePresence() }.collectAsState(initial = null)
 
-    val title = (userState as? UserState.Ready)?.user?.name?.takeIf { it.isNotBlank() } ?: cardUid
+    val title = (userState as? UserState.Ready)?.user?.name?.takeIf { it.isNotBlank() } ?: untitled
 
     Scaffold(
         topBar = {

@@ -75,6 +75,7 @@ fun UserApp(viewModel: UserAppViewModel) {
                     UserScreen(
                         cardUid = saved.uid,
                         onClose = null,
+                        untitled = stringResource(R.string.app_name),
                         actions = {
                             IconButton(onClick = viewModel::startReplace) {
                                 Icon(Icons.Default.CreditCard, contentDescription = stringResource(R.string.ua_replace_card))
@@ -128,10 +129,10 @@ private fun ScanScreen(
                 else -> when (scan) {
                     is ScanState.Checking -> {
                         CircularProgressIndicator()
-                        CenteredText(stringResource(R.string.ua_checking, scan.uid))
+                        CenteredText(stringResource(R.string.ua_checking))
                     }
                     is ScanState.NotRegistered -> {
-                        CenteredText(stringResource(R.string.ua_not_registered, scan.uid))
+                        CenteredText(stringResource(R.string.ua_not_registered))
                         OutlinedButton(onClick = onDismissMessage) { Text(stringResource(R.string.ua_try_again)) }
                     }
                     is ScanState.Failed -> {
@@ -158,8 +159,8 @@ private fun ScanScreen(
                 Text(
                     stringResource(
                         R.string.ua_replace_text,
-                        scan.old.name ?: scan.old.uid,
-                        scan.new.name ?: scan.new.uid
+                        scan.old.name ?: stringResource(R.string.ua_old_card),
+                        scan.new.name ?: stringResource(R.string.ua_new_card)
                     )
                 )
             },

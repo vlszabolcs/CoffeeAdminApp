@@ -4,8 +4,8 @@
     <string name="ua_retry">Retry</string>
     <string name="ua_tap_card">Hold your coffee card to the back of the phone</string>
     <string name="ua_one_card">The app keeps one card. A new card replaces the old one.</string>
-    <string name="ua_checking">Checking card %1$s…</string>
-    <string name="ua_not_registered">Card %1$s is not registered. Ask the administrator.</string>
+    <string name="ua_checking">Checking the card…</string>
+    <string name="ua_not_registered">This card is not registered. Ask the administrator.</string>
     <string name="ua_check_failed">Could not check the card: %1$s</string>
     <string name="ua_try_again">Try again</string>
     <string name="ua_nfc_missing">This phone has no NFC, so it cannot read a card.</string>
@@ -15,5 +15,7 @@
     <string name="ua_replace_title">Replace the card?</string>
     <string name="ua_replace_text">%1$s will be removed from this phone and %2$s will be shown instead.</string>
     <string name="ua_replace_confirm">Replace</string>
+    <string name="ua_old_card">The old card</string>
+    <string name="ua_new_card">the new card</string>
     <string name="ua_cancel">Cancel</string>
 </resources>
