@@ -593,6 +593,14 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
             .addOnFailureListener { onFailure(it.message) }
     }
 
+    // Unbinds the card from the user app's phone (lost phone, reinstalled app), so it can be read in again.
+    fun releaseOwner(user: User) {
+        val uid = user.uid ?: return
+        database.child("users").child(uid).child("owner").removeValue()
+            .addOnSuccessListener { _successMessage.value = context.getString(R.string.success_owner_released) }
+            .addOnFailureListener { _error.value = context.getString(R.string.error_save_format, it.message ?: "") }
+    }
+
     fun deleteUser(user: User) {
         val uid = user.uid ?: return
         _isLoading.value = true

@@ -68,4 +68,7 @@
     <string name="error_user_not_found">Nincs ilyen felhasználó</string>
     <string name="success_logs_deleted">Naplók törölve!</string>
     <string name="error_logs_delete_format">Sikertelen napló törlés: %1$s</string>
+    <string name="owner_bound">Telefonhoz kötve</string>
+    <string name="owner_release">Telefon leválasztása</string>
+    <string name="success_owner_released">Telefon leválasztva, a kártya újra beolvasható</string>
 </resources>

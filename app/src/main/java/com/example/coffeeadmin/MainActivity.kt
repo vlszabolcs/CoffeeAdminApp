@@ -809,6 +809,7 @@ fun QuickCreditDialog(
     var amountText by remember { mutableStateOf("0") }
     var showStats by remember { mutableStateOf(false) }
     var showUserView by remember { mutableStateOf(false) }
+    var ownerReleased by remember(user.uid) { mutableStateOf(false) }
     val logList by viewModel.logList
 
     AlertDialog(
@@ -833,6 +834,15 @@ fun QuickCreditDialog(
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.current_balance_format, user.creditInt))
+                if (user.owner != null && !ownerReleased) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(stringResource(R.string.owner_bound), style = MaterialTheme.typography.bodySmall)
+                        TextButton(onClick = {
+                            viewModel.releaseOwner(user)
+                            ownerReleased = true
+                        }) { Text(stringResource(R.string.owner_release)) }
+                    }
+                }
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 Row(

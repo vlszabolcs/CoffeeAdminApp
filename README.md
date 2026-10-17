@@ -28,7 +28,8 @@ The structure follows the BrewPass firmware:
 
 A separate app for coffee drinkers, built from the same repository: `./gradlew :userapp:installDebug`.
 
-- The phone reads the coffee card by NFC once and keeps that one card; a new card replaces it after confirmation. The app never registers or changes a user, an unknown card gets "ask the administrator".
-- It signs in with Firebase **Anonymous** auth (enable it in the console), so under the database rules it can read only `users/<UID>`, `conf` and `remote/...`.
+- The phone reads the coffee card by NFC once and binds it to itself: `users/<UID>/owner` = the phone's anonymous auth uid. From then on only that phone can read the card and buy with it. Reading a new card binds the new one and unbinds the old one. A card that is unknown or bound to another phone gets "ask the administrator"; the admin app's credit dialog has "Release phone" for a lost phone or a reinstalled app.
+- The app never registers a user or changes credit.
+- It signs in with Firebase **Anonymous** auth (enable it in the console), so under the database rules it can read only its own card, `conf` and `remote/...`.
 - The screen is the `userview` module's `UserScreen`: credit, log, statistics and "Kávét kérek" (virtual card tap on machine `machine1`).
 - Package `com.example.coffeeui`, registered in the TEST project (`userapp/google-services.json`). For production, add this package to `coffeegg-a4840` and replace the file.

@@ -27,6 +27,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -67,21 +70,36 @@ fun UserApp(viewModel: UserAppViewModel) {
                         scan = scan,
                         nfc = nfc,
                         onCancel = if (saved != null) viewModel::cancelReplace else null,
-                        onDismissMessage = viewModel::dismissScanMessage,
-                        onConfirmReplace = viewModel::confirmReplace,
-                        onRejectReplace = viewModel::rejectReplace
+                        onDismissMessage = viewModel::dismissScanMessage
                     )
                 } else {
+                    var confirmReplace by remember { mutableStateOf(false) }
                     UserScreen(
                         cardUid = saved.uid,
                         onClose = null,
                         untitled = stringResource(R.string.app_name),
                         actions = {
-                            IconButton(onClick = viewModel::startReplace) {
+                            IconButton(onClick = { confirmReplace = true }) {
                                 Icon(Icons.Default.CreditCard, contentDescription = stringResource(R.string.ua_replace_card))
                             }
                         }
                     )
+                    if (confirmReplace) {
+                        AlertDialog(
+                            onDismissRequest = { confirmReplace = false },
+                            title = { Text(stringResource(R.string.ua_replace_title)) },
+                            text = { Text(stringResource(R.string.ua_replace_text)) },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    confirmReplace = false
+                                    viewModel.startReplace()
+                                }) { Text(stringResource(R.string.ua_replace_confirm)) }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { confirmReplace = false }) { Text(stringResource(R.string.ua_cancel)) }
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -95,9 +113,7 @@ private fun ScanScreen(
     scan: ScanState,
     nfc: NfcStatus,
     onCancel: (() -> Unit)?,
-    onDismissMessage: () -> Unit,
-    onConfirmReplace: () -> Unit,
-    onRejectReplace: () -> Unit
+    onDismissMessage: () -> Unit
 ) {
     val context = LocalContext.current
     Scaffold(
@@ -127,12 +143,14 @@ private fun ScanScreen(
                     }
                 }
                 else -> when (scan) {
-                    is ScanState.Checking -> {
+                    ScanState.Checking -> {
                         CircularProgressIndicator()
                         CenteredText(stringResource(R.string.ua_checking))
                     }
-                    is ScanState.NotRegistered -> {
-                        CenteredText(stringResource(R.string.ua_not_registered))
+                    ScanState.Refused, ScanState.Lost -> {
+                        CenteredText(
+                            stringResource(if (scan == ScanState.Lost) R.string.ua_card_lost else R.string.ua_refused)
+                        )
                         OutlinedButton(onClick = onDismissMessage) { Text(stringResource(R.string.ua_try_again)) }
                     }
                     is ScanState.Failed -> {
@@ -149,24 +167,6 @@ private fun ScanScreen(
                 TextButton(onClick = onCancel) { Text(stringResource(R.string.ua_cancel)) }
             }
         }
-    }
-
-    if (scan is ScanState.ConfirmReplace) {
-        AlertDialog(
-            onDismissRequest = onRejectReplace,
-            title = { Text(stringResource(R.string.ua_replace_title)) },
-            text = {
-                Text(
-                    stringResource(
-                        R.string.ua_replace_text,
-                        scan.old.name ?: stringResource(R.string.ua_old_card),
-                        scan.new.name ?: stringResource(R.string.ua_new_card)
-                    )
-                )
-            },
-            confirmButton = { TextButton(onClick = onConfirmReplace) { Text(stringResource(R.string.ua_replace_confirm)) } },
-            dismissButton = { TextButton(onClick = onRejectReplace) { Text(stringResource(R.string.ua_cancel)) } }
-        )
     }
 }
 

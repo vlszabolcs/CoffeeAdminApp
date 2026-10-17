@@ -20,7 +20,9 @@ data class User(
     val update: Long? = 0L,
     // Latest key of users/<UID>/log (epoch seconds). Filled from the snapshot, not stored under this name.
     @get:Exclude
-    val lastLog: Long = 0L
+    val lastLog: Long = 0L,
+    // Anonymous auth uid of the user app's phone this card is bound to (users/<UID>/owner), null if none.
+    val owner: String? = null
 ) {
     // No-argument constructor for Firebase
     constructor() : this(null, null, 0L, 0L, 0L, 0L)

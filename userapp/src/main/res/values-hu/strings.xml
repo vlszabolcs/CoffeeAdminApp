@@ -3,9 +3,10 @@
     <string name="ua_sign_in_failed">Nem sikerült csatlakozni a szerverhez: %1$s</string>
     <string name="ua_retry">Újra</string>
     <string name="ua_tap_card">Érintsd a kávékártyádat a telefon hátához</string>
-    <string name="ua_one_card">Az app egy kártyát tárol. Új kártya a régi helyére kerül.</string>
+    <string name="ua_one_card">Az app egy kártyát tárol, és a kártya csak ezen a telefonon használható. Új kártya a régi helyére kerül.</string>
     <string name="ua_checking">Kártya ellenőrzése…</string>
-    <string name="ua_not_registered">Ez a kártya nincs regisztrálva. Keresd az adminisztrátort.</string>
+    <string name="ua_refused">Ez a kártya nincs regisztrálva, vagy már egy másik telefonhoz tartozik. Keresd az adminisztrátort.</string>
+    <string name="ua_card_lost">A mentett kártyád már nem érhető el ezen a telefonon: másik telefonhoz került, vagy törölték. Keresd az adminisztrátort.</string>
     <string name="ua_check_failed">Nem sikerült ellenőrizni a kártyát: %1$s</string>
     <string name="ua_try_again">Újrapróbálom</string>
     <string name="ua_nfc_missing">Ebben a telefonban nincs NFC, így kártyát nem tud olvasni.</string>
@@ -13,9 +14,7 @@
     <string name="ua_nfc_settings">NFC beállítások</string>
     <string name="ua_replace_card">Kártya cseréje</string>
     <string name="ua_replace_title">Lecseréled a kártyát?</string>
-    <string name="ua_replace_text">%1$s törlődik erről a telefonról, és helyette %2$s látszik.</string>
+    <string name="ua_replace_text">Az új kártya beolvasása után a régi leválik erről a telefonról.</string>
     <string name="ua_replace_confirm">Csere</string>
-    <string name="ua_old_card">A régi kártya</string>
-    <string name="ua_new_card">az új kártya</string>
     <string name="ua_cancel">Mégse</string>
 </resources>

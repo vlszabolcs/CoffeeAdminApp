@@ -26,18 +26,20 @@ sealed interface AuthState {
 /** What the card reading screen shows. */
 sealed interface ScanState {
     data object Waiting : ScanState
-    data class Checking(val uid: String) : ScanState
-    data class NotRegistered(val uid: String) : ScanState
+    data object Checking : ScanState
+    /** Not registered, or already bound to another phone: the database does not tell which. */
+    data object Refused : ScanState
+    /** The saved card could not be claimed again at start (bound to another phone or deleted). */
+    data object Lost : ScanState
     data class Failed(val message: String?) : ScanState
-    /** A different card than the saved one was read; it replaces the old card only after confirmation. */
-    data class ConfirmReplace(val old: SavedCard, val new: SavedCard) : ScanState
 }
 
 enum class NfcStatus { Unknown, Missing, Disabled, Enabled }
 
 /**
  * The standalone user app: anonymous sign-in, one saved card read by NFC.
- * The app never registers or changes a user; it only checks that users/<UID> exists.
+ * Reading a card binds it to this phone (users/<UID>/owner = auth uid); the database rules then let
+ * only this phone read the card and buy with it. The app never registers a user or changes credit.
  */
 class UserAppViewModel(application: Application) : AndroidViewModel(application) {
     private val auth = FirebaseAuth.getInstance()
@@ -69,16 +71,33 @@ class UserAppViewModel(application: Application) : AndroidViewModel(application)
 
     fun signIn() {
         if (auth.currentUser != null) {
-            _auth.value = AuthState.SignedIn
+            onSignedIn()
             return
         }
         _auth.value = AuthState.SigningIn
         viewModelScope.launch {
-            _auth.value = try {
+            try {
                 auth.signInAnonymously().await()
-                AuthState.SignedIn
+                onSignedIn()
             } catch (e: Exception) {
-                AuthState.Failed(e.message)
+                _auth.value = AuthState.Failed(e.message)
+            }
+        }
+    }
+
+    /** Claims the saved card again: if the admin released it, this binds it back to this phone. */
+    private fun onSignedIn() {
+        _auth.value = AuthState.SignedIn
+        val saved = store.card.value ?: return
+        viewModelScope.launch {
+            try {
+                claim(saved.uid)
+            } catch (e: Exception) {
+                if (e.isPermissionDenied()) {
+                    store.clear()
+                    _scan.value = ScanState.Lost
+                }
+                // other errors (offline): keep the card, the user view shows the problem
             }
         }
     }
@@ -95,48 +114,37 @@ class UserAppViewModel(application: Application) : AndroidViewModel(application)
 
     /** Called from the NFC reader thread. */
     fun onCardRead(uid: String) {
-        if (!scanning.value || _scan.value is ScanState.Checking || _scan.value is ScanState.ConfirmReplace) return
-        _scan.value = ScanState.Checking(uid)
+        if (!scanning.value || _scan.value == ScanState.Checking) return
+        _scan.value = ScanState.Checking
         viewModelScope.launch {
             _scan.value = try {
-                val snapshot = users.child(uid).get().await()
-                if (!snapshot.child("credit").exists()) {
-                    ScanState.NotRegistered(uid)
-                } else {
-                    val found = SavedCard(uid, snapshot.child("name").value as? String)
-                    val old = store.card.value
-                    if (old == null || old.uid == uid) {
-                        save(found)
-                        ScanState.Waiting
-                    } else {
-                        ScanState.ConfirmReplace(old, found)
-                    }
-                }
+                claim(uid)
+                val name = users.child(uid).child("name").get().await().value as? String
+                val old = store.card.value
+                store.save(SavedCard(uid, name))
+                _replacing.value = false
+                // the old card is free again for whoever reads it next; best effort
+                if (old != null && old.uid != uid) users.child(old.uid).child("owner").removeValue()
+                ScanState.Waiting
             } catch (e: Exception) {
-                ScanState.Failed(e.message)
+                if (e.isPermissionDenied()) ScanState.Refused else ScanState.Failed(e.message)
             }
         }
-    }
-
-    fun confirmReplace() {
-        val state = _scan.value as? ScanState.ConfirmReplace ?: return
-        save(state.new)
-        _scan.value = ScanState.Waiting
-    }
-
-    fun rejectReplace() {
-        _scan.value = ScanState.Waiting
     }
 
     fun dismissScanMessage() {
         _scan.value = ScanState.Waiting
     }
 
-    private fun save(card: SavedCard) {
-        store.save(card)
-        _replacing.value = false
+    /** Binds the card to this phone. Refused if the card is not registered or belongs to another phone. */
+    private suspend fun claim(uid: String) {
+        val authUid = auth.currentUser?.uid ?: error("not signed in")
+        users.child(uid).child("owner").setValue(authUid).await()
     }
 }
+
+private fun Exception.isPermissionDenied(): Boolean =
+    message?.contains("permission denied", ignoreCase = true) == true
 
 private suspend fun <T> Task<T>.await(): T = suspendCancellableCoroutine { cont ->
     addOnCompleteListener { task ->
