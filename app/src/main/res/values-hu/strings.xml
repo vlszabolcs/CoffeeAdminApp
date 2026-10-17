@@ -41,9 +41,11 @@
     <string name="date_summary">Dátum szerinti összesítő</string>
     <string name="all_time">Mindenkori</string>
     <string name="clear_filter">Szűrő törlése</string>
-    <string name="delete_logs">Naplók törlése</string>
+    <string name="delete_logs">Gépnapló törlése</string>
     <string name="select_date_for_stats">Válassz dátumot a statisztikákhoz</string>
-    <string name="confirm_delete_logs_message">Biztosan törölni szeretnéd az összes naplóbejegyzést?</string>
+    <string name="confirm_delete_logs_message">Biztosan törölni szeretnéd a gép eseménynaplóját (/Log)? A felhasználók vásárlási előzményei megmaradnak.</string>
+    <string name="device_events">Gép események</string>
+    <string name="no_device_events">Nincs gép esemény</string>
     <string name="edit">Szerkesztés</string>
     <string name="current_balance_format">Jelenlegi egyenleg: %1$d Ft</string>
     <string name="past_7_days_consumption">Elmúlt 7 nap fogyasztása:</string>
@@ -63,6 +65,7 @@
     <string name="error_save_format">Sikertelen mentés: %1$s</string>
     <string name="success_user_deleted">Felhasználó törölve!</string>
     <string name="error_delete_format">Sikertelen törlés: %1$s</string>
+    <string name="error_user_not_found">Nincs ilyen felhasználó</string>
     <string name="success_logs_deleted">Naplók törölve!</string>
     <string name="error_logs_delete_format">Sikertelen napló törlés: %1$s</string>
 </resources>

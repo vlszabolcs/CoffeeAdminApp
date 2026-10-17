@@ -41,9 +41,11 @@
     <string name="date_summary">Summary by Date</string>
     <string name="all_time">All time</string>
     <string name="clear_filter">Clear Filter</string>
-    <string name="delete_logs">Delete Logs</string>
+    <string name="delete_logs">Delete Device Log</string>
     <string name="select_date_for_stats">Select a date for statistics</string>
-    <string name="confirm_delete_logs_message">Are you sure you want to delete all log entries?</string>
+    <string name="confirm_delete_logs_message">Are you sure you want to delete the device status log (/Log)? The purchase history of the users is kept.</string>
+    <string name="device_events">Device events</string>
+    <string name="no_device_events">No device events</string>
     <string name="edit">Edit</string>
     <string name="current_balance_format">Current Balance: %1$d Ft</string>
     <string name="past_7_days_consumption">Last 7 days consumption:</string>
@@ -63,6 +65,7 @@
     <string name="error_save_format">Save failed: %1$s</string>
     <string name="success_user_deleted">User deleted!</string>
     <string name="error_delete_format">Delete failed: %1$s</string>
+    <string name="error_user_not_found">No such user</string>
     <string name="success_logs_deleted">Logs deleted!</string>
     <string name="error_logs_delete_format">Failed to delete logs: %1$s</string>
 </resources>

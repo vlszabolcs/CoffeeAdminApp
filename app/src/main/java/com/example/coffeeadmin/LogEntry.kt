@@ -2,25 +2,25 @@ package com.example.coffeeadmin
 
 import androidx.compose.runtime.Immutable
 import androidx.room.Entity
-import androidx.room.PrimaryKey
 import com.google.firebase.database.Exclude
 import com.google.firebase.database.IgnoreExtraProperties
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+// Local cache of users/<UID>/log (see CreditLog). Two users can have an entry in the same second,
+// so the key is (userId, timestamp). userId is "" for legacy /Log entries that had no user.
 @IgnoreExtraProperties
 @Immutable
-@Entity(tableName = "logs")
+@Entity(tableName = "logs", primaryKeys = ["userId", "timestamp"])
 data class LogEntry(
-    @PrimaryKey
     val timestamp: Long = 0L,
     val actionValue: String = "0", // Store as string for Room compatibility
     val remainingCredit: Long? = 0L,
-    val userId: String? = null
+    val userId: String = ""
 ) {
     // No-argument constructor for Firebase
-    constructor() : this(0L, "0", 0L, null)
+    constructor() : this(0L, "0", 0L, "")
 
     // Firebase uses 'action', so we map it
     @get:Exclude
@@ -43,9 +43,9 @@ data class LogEntry(
     @get:Exclude
     val actionText: String
         get() = when (actionInt) {
-            0 -> "Kávé vásárlás"
-            1 -> "Kredit feltöltés"
-            2 -> "Felhasználó létrehozás"
+            CreditLog.ACTION_PURCHASE -> "Kávé vásárlás"
+            CreditLog.ACTION_TOP_UP -> "Kredit feltöltés"
+            CreditLog.ACTION_INITIAL -> "Kezdő egyenleg"
             else -> "Egyéb művelet ($actionInt)"
         }
 

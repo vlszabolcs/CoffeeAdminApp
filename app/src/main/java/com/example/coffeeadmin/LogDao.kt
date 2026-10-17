@@ -14,8 +14,9 @@ interface LogDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLogs(logs: List<LogEntry>)
 
-    @Query("SELECT MAX(timestamp) FROM logs")
-    suspend fun getMaxTimestamp(): Long?
+    // the last cached credit of a user before a given time (to classify the first entry of users/<UID>/log)
+    @Query("SELECT remainingCredit FROM logs WHERE userId = :userId AND timestamp < :before ORDER BY timestamp DESC LIMIT 1")
+    suspend fun getCreditBefore(userId: String, before: Long): Long?
 
     @Query("DELETE FROM logs")
     suspend fun deleteAll()

@@ -10,13 +10,17 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.MutableData
 import com.google.firebase.database.ServerValue
+import com.google.firebase.database.Transaction
 import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.getValue
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collectLatest
+import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
+import java.util.Locale
 
 data class UserLogStat(
     val userId: String,
@@ -30,7 +34,20 @@ data class DailyStat(
     val count: Int
 )
 
+// /Log/<epoch> = {"e": event, "d": details} - device status log of the brewpass firmware
+data class DeviceEvent(
+    val timestamp: Long,
+    val event: String,
+    val detail: String
+)
+
 class UserViewModel(application: Application) : AndroidViewModel(application) {
+    companion object {
+        private const val DEVICE_EVENT_LIMIT = 50
+    }
+
+    private val dayKeyFormat = SimpleDateFormat("yyyyMMdd", Locale.US)
+
     private val auth = FirebaseAuth.getInstance()
     private val database = FirebaseDatabase.getInstance().reference
     private val logDao = AppDatabase.getDatabase(application).logDao()
@@ -41,6 +58,12 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _logList = mutableStateOf<List<LogEntry>>(emptyList())
     val logList: State<List<LogEntry>> = _logList
+
+    // /stat/free/<YYYYMMDD> = number of free-mode purchases that day
+    private val _freeStats = mutableStateOf<Map<String, Int>>(emptyMap())
+
+    private val _deviceEvents = mutableStateOf<List<DeviceEvent>>(emptyList())
+    val deviceEvents: State<List<DeviceEvent>> = _deviceEvents
 
     private val _searchQuery = mutableStateOf("")
     val searchQuery: State<String> = _searchQuery
@@ -66,11 +89,11 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
         val thirtyDaysInSeconds = 30L * 24 * 60 * 60
         val threshold = nowSeconds - thirtyDaysInSeconds
         
-        val activeUsers = filtered.filter { it.updateLong > threshold }
-        val inactiveUsers = filtered.filter { it.updateLong <= threshold }
+        val activeUsers = filtered.filter { it.lastActivity > threshold }
+        val inactiveUsers = filtered.filter { it.lastActivity <= threshold }
 
         val sortedActive = activeUsers.sortedBy { it.creditInt }
-        val sortedInactive = inactiveUsers.sortedByDescending { it.updateLong }
+        val sortedInactive = inactiveUsers.sortedByDescending { it.lastActivity }
 
         sortedActive + sortedInactive
     }
@@ -78,8 +101,8 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
     // ÚJ: Felhasználónkénti kávészám (a listához)
     val userCoffeeCounts: State<Map<String, Int>> = derivedStateOf {
         _logList.value
-            .filter { it.userId != null && it.actionInt == 0 }
-            .groupBy { it.userId!! }
+            .filter { it.userId.isNotEmpty() && it.actionInt == CreditLog.ACTION_PURCHASE }
+            .groupBy { it.userId }
             .mapValues { it.value.size }
     }
 
@@ -88,19 +111,25 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
         val users = _userList.value
         val selected = _selectedDate.value
         
-        _logList.value
-            .filter { it.userId != null }
+        val perUser = _logList.value
+            .filter { it.userId.isNotEmpty() }
             .filter { entry ->
                 if (selected == null) true
                 else isSameDay(entry.timestamp, selected)
             }
-            .groupBy { it.userId!! }
+            .groupBy { it.userId }
             .map { (uid, logs) ->
                 val name = users.find { it.uid == uid }?.name ?: uid
-                val coffeeCount = logs.count { it.actionInt == 0 }
+                val coffeeCount = logs.count { it.actionInt == CreditLog.ACTION_PURCHASE }
                 val lastAction = logs.maxOfOrNull { it.timestamp } ?: 0L
                 UserLogStat(uid, name, coffeeCount, lastAction)
             }
+
+        // free-mode purchases are not tied to a user: one extra row from /stat/free
+        val freeCount = if (selected == null) _freeStats.value.values.sum() else freeCountOn(selected)
+        val freeRow = UserLogStat("", context.getString(R.string.free_coffee), freeCount, 0L)
+
+        (perUser + freeRow)
             .filter { it.coffeeCount > 0 }
             .sortedByDescending { it.coffeeCount }
     }
@@ -113,7 +142,8 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
         
         for (i in 0..6) {
             val date = cal.timeInMillis
-            val count = _logList.value.count { it.actionInt == 0 && isSameDay(it.timestamp, date) }
+            val count = _logList.value.count { it.actionInt == CreditLog.ACTION_PURCHASE && isSameDay(it.timestamp, date) } +
+                freeCountOn(date)
             val label = if (i == 0) todayStr else "${cal.get(Calendar.DAY_OF_MONTH)}."
             results.add(0, DailyStat(label, count))
             cal.add(Calendar.DAY_OF_YEAR, -1)
@@ -130,7 +160,7 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
         for (i in 0..6) {
             val date = cal.timeInMillis
             val count = _logList.value.count { 
-                it.userId == userId && it.actionInt == 0 && isSameDay(it.timestamp, date) 
+                it.userId == userId && it.actionInt == CreditLog.ACTION_PURCHASE && isSameDay(it.timestamp, date)
             }
             val label = if (i == 0) todayStr else "${cal.get(Calendar.DAY_OF_MONTH)}."
             results.add(0, DailyStat(label, count))
@@ -138,6 +168,9 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
         }
         return results
     }
+
+    private fun freeCountOn(dateMillis: Long): Int =
+        _freeStats.value[dayKeyFormat.format(Date(dateMillis))] ?: 0
 
     private fun isSameDay(ts1: Long, ts2: Long): Boolean {
         val d1 = Calendar.getInstance().apply { timeInMillis = if (ts1 > 9999999999L) ts1 else ts1 * 1000 }
@@ -195,7 +228,8 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
         fetchAllUsers()
         listenToMachineConfig()
         listenToIncome()
-        listenToLogs()
+        listenToFreeStats()
+        listenToDeviceEvents()
     }
 
     private fun listenToMachineConfig() {
@@ -226,45 +260,41 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
         })
     }
 
-    private fun listenToLogs() {
-        viewModelScope.launch {
-            val lastTimestamp = logDao.getMaxTimestamp() ?: 0L
-            
-            database.child("Log")
-                .orderByKey()
-                .startAfter(lastTimestamp.toString())
-                .addValueEventListener(object : ValueEventListener {
-                    override fun onDataChange(snapshot: DataSnapshot) {
-                        val newLogs = mutableListOf<LogEntry>()
-                        snapshot.children.forEach { child ->
-                            val timestamp = child.key?.toLongOrNull() ?: 0L
-                            val map = child.value as? Map<*, *>
-                            if (map != null) {
-                                val action = map["action"]?.toString() ?: "0"
-                                val remainingCredit = (map["remainingCredit"] as? Number)?.toLong() ?: 0L
-                                val userId = map["userId"]?.toString()
-                                
-                                newLogs.add(LogEntry(
-                                    timestamp = timestamp,
-                                    actionValue = action,
-                                    remainingCredit = remainingCredit,
-                                    userId = userId
-                                ))
-                            }
-                        }
-                        
-                        if (newLogs.isNotEmpty()) {
-                            viewModelScope.launch {
-                                logDao.insertLogs(newLogs)
-                            }
-                        }
-                    }
+    private fun listenToFreeStats() {
+        database.child("stat").child("free").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                _freeStats.value = snapshot.children.mapNotNull { child ->
+                    val day = child.key ?: return@mapNotNull null
+                    val count = (child.value as? Number)?.toInt() ?: return@mapNotNull null
+                    day to count
+                }.toMap()
+            }
 
-                    override fun onCancelled(error: DatabaseError) {
-                        _error.value = error.message
-                    }
-                })
-        }
+            override fun onCancelled(error: DatabaseError) {
+                _error.value = error.message
+            }
+        })
+    }
+
+    // /Log is the device status log since the brewpass firmware (purchases are under users/<UID>/log)
+    private fun listenToDeviceEvents() {
+        database.child("Log")
+            .orderByKey()
+            .limitToLast(DEVICE_EVENT_LIMIT)
+            .addValueEventListener(object : ValueEventListener {
+                override fun onDataChange(snapshot: DataSnapshot) {
+                    _deviceEvents.value = snapshot.children.mapNotNull { child ->
+                        val timestamp = child.key?.toLongOrNull() ?: return@mapNotNull null
+                        // older entries in the old purchase format have no "e" field
+                        val event = child.child("e").value?.toString() ?: return@mapNotNull null
+                        DeviceEvent(timestamp, event, child.child("d").value?.toString() ?: "")
+                    }.sortedByDescending { it.timestamp }
+                }
+
+                override fun onCancelled(error: DatabaseError) {
+                    _error.value = error.message
+                }
+            })
     }
 
     private fun checkCoffeeLevel() {
@@ -287,7 +317,22 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun updateMachineConfig(config: MachineConfig) {
-        database.child("conf").setValue(config)
+        // the firmware rejects a price <= 0 (E60) and would keep the old one
+        if (config.priceLong <= 0L) {
+            _error.value = context.getString(R.string.error_machine_update_format, "price <= 0")
+            return
+        }
+        // only the fields of this app: /conf is watched by the machine, other keys stay as they are
+        val beans = config.coffeeBeans
+        val updates = mapOf<String, Any?>(
+            "free" to config.free,
+            "price" to config.priceLong,
+            "coffeeThreshold" to config.coffeeThreshold,
+            "coffeeBeans/inStock" to beans.inStock,
+            "coffeeBeans/price" to beans.price,
+            "coffeeBeans/threshold" to beans.threshold
+        )
+        database.child("conf").updateChildren(updates)
             .addOnSuccessListener {
                 _successMessage.value = context.getString(R.string.success_updated)
             }
@@ -350,19 +395,100 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
         database.child("users").get()
             .addOnSuccessListener { snapshot ->
                 val users = mutableListOf<User>()
+                val logs = mutableMapOf<String, Map<Long, Long>>()
                 snapshot.children.forEach { child ->
+                    val uid = child.key ?: return@forEach
                     val user = child.getValue<User>()
                     if (user != null) {
-                        users.add(user.copy(uid = child.key))
+                        val log = readCreditLog(child.child("log"))
+                        logs[uid] = log
+                        users.add(user.copy(uid = uid, lastLog = log.keys.maxOrNull() ?: 0L))
                     }
                 }
                 _userList.value = users
                 _isLoading.value = false
+                syncLogCache(logs)
             }
             .addOnFailureListener { exception ->
                 _error.value = exception.message
                 _isLoading.value = false
             }
+    }
+
+    private fun readCreditLog(log: DataSnapshot): Map<Long, Long> =
+        log.children.mapNotNull { entry ->
+            val timestamp = entry.key?.toLongOrNull() ?: return@mapNotNull null
+            val credit = (entry.value as? Number)?.toLong() ?: return@mapNotNull null
+            timestamp to credit
+        }.toMap()
+
+    // users/<UID>/log -> local Room cache (the statistics are computed from the cache)
+    private fun syncLogCache(logs: Map<String, Map<Long, Long>>) {
+        viewModelScope.launch {
+            val entries = logs.flatMap { (uid, log) ->
+                if (log.isEmpty()) return@flatMap emptyList()
+                val previous = logDao.getCreditBefore(uid, log.keys.min())
+                CreditLog.toEntries(uid, log, previous)
+            }
+            if (entries.isNotEmpty()) {
+                logDao.insertLogs(entries)
+            }
+        }
+    }
+
+    /**
+     * Changes a user in ONE transaction, the same way as the firmware: the credit and its log entry
+     * users/<UID>/log/<epoch> = new credit are written together, so the device sees every change.
+     * [newCredit] gets the current credit from the server and returns the new one (null = unchanged).
+     * [onSuccess] gets the credit difference (for the income).
+     */
+    private fun runUserTransaction(
+        uid: String,
+        mustExist: Boolean,
+        fields: Map<String, Any?> = emptyMap(),
+        newCredit: (Long) -> Long?,
+        onSuccess: (Long) -> Unit,
+        onFailure: (String?) -> Unit
+    ) {
+        var delta = 0L
+        database.child("users").child(uid).runTransaction(object : Transaction.Handler {
+            override fun doTransaction(currentData: MutableData): Transaction.Result {
+                delta = 0L
+                // null may just be an empty local cache: the server rejects it and calls again with the real data
+                if (mustExist && currentData.value == null) {
+                    return Transaction.success(currentData)
+                }
+                fields.forEach { (key, value) -> currentData.child(key).value = value }
+
+                val log = currentData.child("log")
+                val current = (currentData.child("credit").value as? Number)?.toLong() ?: 0L
+                val target = newCredit(current)
+                // a new user always gets a first entry, so later changes can be classified
+                if (target != null && (target != current || !log.hasChildren())) {
+                    val now = System.currentTimeMillis() / 1000
+                    val key = CreditLog.nextKey(now, log.children.map { it.key })
+                    currentData.child("credit").value = target
+                    log.child(key.toString()).value = target
+                    delta = target - current
+                }
+                return Transaction.success(currentData)
+            }
+
+            override fun onComplete(error: DatabaseError?, committed: Boolean, currentData: DataSnapshot?) {
+                when {
+                    error != null -> onFailure(error.message)
+                    !committed -> onFailure(null)
+                    mustExist && currentData?.exists() != true -> onFailure(context.getString(R.string.error_user_not_found))
+                    else -> onSuccess(delta)
+                }
+            }
+        })
+    }
+
+    private fun addIncome(delta: Long) {
+        if (delta != 0L) {
+            database.child("stat").child("income").setValue(ServerValue.increment(delta))
+        }
     }
 
     fun searchUserByUid(uid: String) {
@@ -395,64 +521,86 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateCredit(user: User, amount: Int) {
         val uid = user.uid ?: return
-        val newCredit = user.creditInt + amount
-        val now = System.currentTimeMillis() / 1000 // Seconds
-        
-        val updates = mapOf(
-            "users/$uid/credit" to newCredit,
-            "users/$uid/update" to now,
-            "stat/income" to ServerValue.increment(amount.toLong())
-        )
-        
-        database.updateChildren(updates)
-            .addOnSuccessListener {
-                fetchAllUsers() 
+        if (amount == 0) return
+
+        // relative to the CURRENT server value: the machine may have charged a purchase meanwhile
+        runUserTransaction(
+            uid = uid,
+            mustExist = true,
+            newCredit = { current -> current + amount },
+            onSuccess = { delta ->
+                addIncome(delta)
+                fetchAllUsers()
                 _successMessage.value = context.getString(R.string.success_credit_updated)
+            },
+            onFailure = {
+                _error.value = context.getString(R.string.error_update_format, it ?: "")
             }
-            .addOnFailureListener {
-                _error.value = context.getString(R.string.error_update_format, it.message)
-            }
+        )
     }
 
     fun updateUser(updatedUser: User, oldUid: String? = null) {
         val uid = updatedUser.uid ?: return
         _isLoading.value = true
-        val now = System.currentTimeMillis() / 1000 // Seconds
-        
+
         val effectiveOldUid = oldUid ?: uid
         val oldUser = _userList.value.find { it.uid == effectiveOldUid }
-        val creditDiff = if (oldUser != null) {
-            updatedUser.creditLong - oldUser.creditLong
-        } else {
-            updatedUser.creditLong
+
+        val onSuccess: (Long) -> Unit = { delta ->
+            addIncome(delta)
+            _isLoading.value = false
+            fetchAllUsers()
+            _successMessage.value = context.getString(R.string.success_user_saved)
+        }
+        val onFailure: (String?) -> Unit = {
+            _error.value = context.getString(R.string.error_save_format, it ?: "")
+            _isLoading.value = false
         }
 
-        val updates = mutableMapOf<String, Any?>(
-            "users/$uid/name" to updatedUser.name,
-            "users/$uid/credit" to updatedUser.creditLong,
-            "users/$uid/loan" to updatedUser.loanLong,
-            "users/$uid/update" to now
-        )
-        
-        if (creditDiff != 0L) {
-            updates["stat/income"] = ServerValue.increment(creditDiff)
-        }
-
-        // If UID changed, remove old and set new
+        // UID changed: move the whole node (log included) in one multi-path update
         if (oldUid != null && oldUid != uid) {
-            database.child("users").child(oldUid).removeValue()
+            moveUser(oldUid, updatedUser, onSuccess, onFailure)
+            return
         }
 
-        database.updateChildren(updates)
-            .addOnSuccessListener {
-                _isLoading.value = false
-                fetchAllUsers()
-                _successMessage.value = context.getString(R.string.success_user_saved)
+        // The dialog shows the credit as it was when it opened. It is only written if the admin changed
+        // it, so a purchase made meanwhile is not overwritten by a name-only edit.
+        val creditEdited = oldUser == null || updatedUser.creditLong != oldUser.creditLong
+        runUserTransaction(
+            uid = uid,
+            mustExist = false,
+            fields = mapOf("name" to updatedUser.name, "loan" to updatedUser.loanLong),
+            newCredit = { current -> if (creditEdited) updatedUser.creditLong else current },
+            onSuccess = onSuccess,
+            onFailure = onFailure
+        )
+    }
+
+    private fun moveUser(oldUid: String, updatedUser: User, onSuccess: (Long) -> Unit, onFailure: (String?) -> Unit) {
+        val uid = updatedUser.uid ?: return
+        database.child("users").child(oldUid).get()
+            .addOnSuccessListener { snapshot ->
+                val log = readCreditLog(snapshot.child("log")).mapKeys { it.key.toString() }.toMutableMap<String, Any?>()
+                val current = (snapshot.child("credit").value as? Number)?.toLong() ?: 0L
+                val target = updatedUser.creditLong
+                if (target != current || log.isEmpty()) {
+                    val now = System.currentTimeMillis() / 1000
+                    log[CreditLog.nextKey(now, log.keys).toString()] = target
+                }
+
+                @Suppress("UNCHECKED_CAST")
+                val node = (snapshot.value as? Map<String, Any?>)?.toMutableMap() ?: mutableMapOf()
+                node["name"] = updatedUser.name
+                node["credit"] = target
+                node["loan"] = updatedUser.loanLong
+                node["log"] = log
+                node.remove("update")
+
+                database.updateChildren(mapOf("users/$oldUid" to null, "users/$uid" to node))
+                    .addOnSuccessListener { onSuccess(target - current) }
+                    .addOnFailureListener { onFailure(it.message) }
             }
-            .addOnFailureListener {
-                _error.value = context.getString(R.string.error_save_format, it.message)
-                _isLoading.value = false
-            }
+            .addOnFailureListener { onFailure(it.message) }
     }
 
     fun deleteUser(user: User) {
@@ -470,12 +618,11 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
             }
     }
 
+    // Deletes the device status log (/Log). The purchase history lives in users/<UID>/log and stays.
     fun deleteLogs() {
         database.child("Log").removeValue()
             .addOnSuccessListener {
-                viewModelScope.launch {
-                    logDao.deleteAll()
-                }
+                _deviceEvents.value = emptyList()
                 _successMessage.value = context.getString(R.string.success_logs_deleted)
             }
             .addOnFailureListener {

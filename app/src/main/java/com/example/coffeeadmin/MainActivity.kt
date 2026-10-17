@@ -629,6 +629,7 @@ fun LogScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
     val chartData by viewModel.chartData
     val selectedDate by viewModel.selectedDate
     val logStats by viewModel.logStats
+    val deviceEvents by viewModel.deviceEvents
     val isLoading by viewModel.isLoading
     val context = LocalContext.current
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -700,6 +701,8 @@ fun LogScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
                     }
                 }
             }
+
+            DeviceEventsCard(events = deviceEvents)
             Spacer(modifier = Modifier.height(16.dp))
         }
     }
@@ -723,6 +726,42 @@ fun LogScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
                 }
             }
         )
+    }
+}
+
+@Composable
+fun DeviceEventsCard(events: List<DeviceEvent>) {
+    val timeFormatter = remember { SimpleDateFormat("yyyy.MM.dd. HH:mm:ss", Locale.getDefault()) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(text = stringResource(R.string.device_events), style = MaterialTheme.typography.titleMedium)
+            if (events.isEmpty()) {
+                Text(text = stringResource(R.string.no_device_events), style = MaterialTheme.typography.bodySmall)
+            }
+            events.forEach { event ->
+                Column {
+                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = event.event,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (event.event == "error") MaterialTheme.colorScheme.error else Color.Unspecified
+                        )
+                        Text(
+                            text = timeFormatter.format(Date(event.timestamp * 1000)),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    if (event.detail.isNotEmpty()) {
+                        Text(text = event.detail, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        }
     }
 }
 
