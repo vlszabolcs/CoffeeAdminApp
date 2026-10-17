@@ -24,4 +24,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "CoffeeAdmin"
 include(":app")
+include(":userview")
  
