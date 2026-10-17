@@ -628,71 +628,80 @@ fun MachineScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
 fun LogScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
     val chartData by viewModel.chartData
     val selectedDate by viewModel.selectedDate
+    val logStats by viewModel.logStats
     val isLoading by viewModel.isLoading
     val context = LocalContext.current
     var showDeleteConfirm by remember { mutableStateOf(false) }
     
     val dateFormatter = remember { SimpleDateFormat("yyyy.MM.dd.", Locale.getDefault()) }
 
-    Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        // Grafikon Szekció
-        Card(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(text = stringResource(R.string.consumption_last_7_days), style = MaterialTheme.typography.titleMedium)
-                Spacer(modifier = Modifier.height(16.dp))
-                CoffeeChart(data = chartData)
-            }
-        }
-
-        // Szűrés és Fejléc
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column {
-                Text(text = stringResource(R.string.date_summary), style = MaterialTheme.typography.titleLarge)
-                Text(
-                    text = if (selectedDate == null) stringResource(R.string.all_time) else dateFormatter.format(Date(selectedDate!!)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.clickable {
-                        val cal = Calendar.getInstance()
-                        selectedDate?.let { cal.timeInMillis = it }
-                        DatePickerDialog(context, { _, y, m, d ->
-                            val newCal = Calendar.getInstance()
-                            newCal.set(y, m, d)
-                            viewModel.setSelectedDate(newCal.timeInMillis)
-                        }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show()
-                    }
-                )
-            }
-            
-            Row {
-                if (selectedDate != null) {
-                    IconButton(onClick = { viewModel.setSelectedDate(null) }) {
-                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear_filter))
-                    }
-                }
-                IconButton(onClick = { showDeleteConfirm = true }) {
-                    Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.delete_logs), tint = Color.Red)
+    Column(modifier = modifier.fillMaxSize()) {
+        Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            // Grafikon Szekció
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(text = stringResource(R.string.consumption_last_7_days), style = MaterialTheme.typography.titleMedium)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    CoffeeChart(data = chartData)
                 }
             }
-        }
 
-        if (isLoading) {
-            Box(modifier = Modifier.height(200.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+            // Szűrés és Fejléc
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(text = stringResource(R.string.date_summary), style = MaterialTheme.typography.titleLarge)
+                    Text(
+                        text = if (selectedDate == null) stringResource(R.string.all_time) else dateFormatter.format(Date(selectedDate!!)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.clickable {
+                            val cal = Calendar.getInstance()
+                            selectedDate?.let { cal.timeInMillis = it }
+                            DatePickerDialog(context, { _, y, m, d ->
+                                val newCal = Calendar.getInstance()
+                                newCal.set(y, m, d)
+                                viewModel.setSelectedDate(newCal.timeInMillis)
+                            }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show()
+                        }
+                    )
+                }
+                
+                Row {
+                    if (selectedDate != null) {
+                        IconButton(onClick = { viewModel.setSelectedDate(null) }) {
+                            Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear_filter))
+                        }
+                    }
+                    IconButton(onClick = { showDeleteConfirm = true }) {
+                        Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.delete_logs), tint = Color.Red)
+                    }
+                }
             }
-        } else {
-            Box(modifier = Modifier.height(100.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Text(stringResource(R.string.select_date_for_stats))
+
+            if (isLoading) {
+                Box(modifier = Modifier.height(200.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else if (logStats.isEmpty()) {
+                Box(modifier = Modifier.height(100.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Text(stringResource(R.string.select_date_for_stats))
+                }
+            } else {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    logStats.forEach { stat ->
+                        LogStatRow(stat)
+                    }
+                }
             }
+            Spacer(modifier = Modifier.height(16.dp))
         }
-        Spacer(modifier = Modifier.height(16.dp))
     }
 
     if (showDeleteConfirm) {
@@ -714,6 +723,30 @@ fun LogScreen(viewModel: UserViewModel, modifier: Modifier = Modifier) {
                 }
             }
         )
+    }
+}
+
+@Composable
+fun LogStatRow(stat: UserLogStat) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp).fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stat.userName, 
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyLarge, 
+                fontWeight = FontWeight.Bold
+            )
+            Badge(containerColor = MaterialTheme.colorScheme.primary) {
+                Text(text = "${stat.coffeeCount} db", modifier = Modifier.padding(4.dp))
+            }
+        }
     }
 }
 
@@ -828,15 +861,22 @@ fun CoffeeChart(data: List<DailyStat>) {
             val barHeightFactor = stat.count.toFloat() / maxCount
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f).fillMaxHeight()
             ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth(0.6f)
-                        .fillMaxHeight(barHeightFactor)
-                        .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                        .background(if (stat.dateLabel == todayLabel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary)
-                )
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.6f)
+                            .fillMaxHeight(barHeightFactor)
+                            .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                            .background(if (stat.dateLabel == todayLabel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary)
+                    )
+                }
                 Text(text = stat.count.toString(), fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 Text(text = stat.dateLabel, fontSize = 8.sp)
             }
