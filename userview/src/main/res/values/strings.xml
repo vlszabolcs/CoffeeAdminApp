@@ -38,8 +38,10 @@
     <string name="uv_vend_error_code">Error E%1$d</string>
     <string name="uv_vend_e30">E30: unregistered card</string>
     <string name="uv_vend_e31">E31: not enough credit</string>
-    <string name="uv_vend_e33">E33: the machine is serving someone else</string>
+    <string name="uv_vend_e33">E33: the machine refused the request (busy, free mode or someone tapped a card)</string>
     <string name="uv_vend_e50">E50: the machine does not accept credit now</string>
     <string name="uv_vend_e25">E25: the credit could not be updated, nothing was charged</string>
+    <string name="uv_vend_e51">E51: charged, but the machine did not confirm the credit</string>
+    <string name="uv_vend_e52">E52: the machine did not become ready again</string>
     <string name="uv_vend_e53">E53: charged, but the machine did not take the credit</string>
 </resources>

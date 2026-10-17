@@ -127,6 +127,8 @@ private fun vendMessage(progress: VendProgress): String = when (progress) {
             31 -> stringResource(R.string.uv_vend_e31)
             33 -> stringResource(R.string.uv_vend_e33)
             50 -> stringResource(R.string.uv_vend_e50)
+            51 -> stringResource(R.string.uv_vend_e51)
+            52 -> stringResource(R.string.uv_vend_e52)
             53 -> stringResource(R.string.uv_vend_e53)
             else -> stringResource(R.string.uv_vend_error_code, code)
         }

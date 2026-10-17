@@ -38,8 +38,10 @@
     <string name="uv_vend_error_code">Hiba: E%1$d</string>
     <string name="uv_vend_e30">E30: nem regisztrált kártya</string>
     <string name="uv_vend_e31">E31: nincs elég kredit</string>
-    <string name="uv_vend_e33">E33: a gép éppen mást szolgál ki</string>
+    <string name="uv_vend_e33">E33: a gép elutasította a kérést (foglalt, ingyenes mód vagy éppen kártyát érintettek)</string>
     <string name="uv_vend_e50">E50: a gép most nem fogad kreditet</string>
     <string name="uv_vend_e25">E25: a kreditet nem sikerült frissíteni, nem történt terhelés</string>
+    <string name="uv_vend_e51">E51: terhelés megtörtént, de a gép nem igazolta vissza a kreditet</string>
+    <string name="uv_vend_e52">E52: a gép nem állt vissza készenlétbe</string>
     <string name="uv_vend_e53">E53: terhelés megtörtént, de a gép nem vette át a kreditet</string>
 </resources>
