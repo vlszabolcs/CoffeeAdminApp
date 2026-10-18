@@ -56,7 +56,18 @@ class RemoteVendRepository(
      * Sends a purchase request for [cardUid] and follows its status until the machine reports
      * done or an error. The machine charges the credit itself, exactly as for a card tap.
      */
-    fun requestVend(cardUid: String): Flow<VendProgress> = callbackFlow {
+    fun requestVend(cardUid: String): Flow<VendProgress> =
+        send(mapOf("cardUid" to cardUid, "ts" to ServerValue.TIMESTAMP))
+
+    /**
+     * Asks the machine to move [amount] Ft from [cardUid] to [toUid]. The machine reads and writes both cards;
+     * it answers accepted -> done (credit = the sender's new credit) | error. Only send it if the machine's
+     * presence says [MachinePresence.transfer]: an older firmware would run it as a purchase.
+     */
+    fun requestTransfer(cardUid: String, toUid: String, amount: Long): Flow<VendProgress> =
+        send(mapOf("cardUid" to cardUid, "ts" to ServerValue.TIMESTAMP, "to" to toUid, "amount" to amount))
+
+    private fun send(fields: Map<String, Any>): Flow<VendProgress> = callbackFlow {
         val machine = root.child(RemotePaths.ROOT).child(machineId)
         val request = machine.child(RemotePaths.REQUEST).push()
         val status = machine.child(RemotePaths.STATUS).child(request.key!!)
@@ -75,7 +86,7 @@ class RemoteVendRepository(
         }
         status.addValueEventListener(listener)
 
-        request.setValue(mapOf("cardUid" to cardUid, "ts" to ServerValue.TIMESTAMP))
+        request.setValue(fields)
             .addOnSuccessListener { trySend(VendProgress.Sent) }
             .addOnFailureListener {
                 trySend(VendProgress.Failed(null, it.message))

@@ -44,4 +44,8 @@
     <string name="uv_vend_e51">E51: charged, but the machine did not confirm the credit</string>
     <string name="uv_vend_e52">E52: the machine did not become ready again</string>
     <string name="uv_vend_e53">E53: charged, but the machine did not take the credit</string>
+    <string name="uv_event_transfer_out">Transfer sent</string>
+    <string name="uv_event_transfer_in">Transfer received</string>
+    <string name="uv_event_transfer_to">Transfer to %1$s</string>
+    <string name="uv_event_transfer_from">Transfer from %1$s</string>
 </resources>

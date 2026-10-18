@@ -1,5 +1,6 @@
 package com.example.coffee.userview.data
 
+import com.example.coffee.userview.stats.TransferMark
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.DatabaseReference
@@ -15,7 +16,9 @@ data class CardUser(
     val name: String?,
     val credit: Long,
     /** users/<UID>/log: epoch seconds -> credit after the change */
-    val log: Map<Long, Long>
+    val log: Map<Long, Long>,
+    /** users/<UID>/xfer: log keys that are credit transfers */
+    val transfers: Map<Long, TransferMark> = emptyMap()
 )
 
 sealed interface UserState {
@@ -28,8 +31,11 @@ sealed interface UserState {
 /** /conf as far as a user is concerned. */
 data class MachineConfig(val price: Long = 0, val free: Boolean = false)
 
-/** remote/<machine>/online, refreshed by the firmware while it accepts in-app purchases. */
-data class MachinePresence(val lastSeenMs: Long, val ready: Boolean)
+/**
+ * remote/<machine>/online, refreshed by the firmware while it accepts in-app purchases.
+ * [transfer]: the firmware handles credit transfers (an older one would run a transfer request as a purchase).
+ */
+data class MachinePresence(val lastSeenMs: Long, val ready: Boolean, val transfer: Boolean = false)
 
 /**
  * Reads only the paths a user may read under the database rules (users/<UID>, conf, remote/...),
@@ -51,7 +57,8 @@ class UserViewRepository(
                             uid = cardUid,
                             name = snapshot.child("name").value as? String,
                             credit = credit,
-                            log = readLog(snapshot.child("log"))
+                            log = readLog(snapshot.child("log")),
+                            transfers = readTransfers(snapshot.child("xfer"))
                         )
                     )
                 }
@@ -74,7 +81,8 @@ class UserViewRepository(
             result.getOrNull()?.takeIf { it.exists() }?.let { snapshot ->
                 MachinePresence(
                     lastSeenMs = epochMs((snapshot.child("ts").value as? Number)?.toLong() ?: 0L),
-                    ready = snapshot.child("ready").value as? Boolean ?: false
+                    ready = snapshot.child("ready").value as? Boolean ?: false,
+                    transfer = snapshot.child("transfer").value as? Boolean ?: false
                 )
             }
         }
@@ -87,6 +95,13 @@ class UserViewRepository(
             val key = entry.key?.toLongOrNull() ?: return@mapNotNull null
             val value = (entry.value as? Number)?.toLong() ?: return@mapNotNull null
             key to value
+        }.toMap()
+
+    private fun readTransfers(xfer: DataSnapshot): Map<Long, TransferMark> =
+        xfer.children.mapNotNull { entry ->
+            val key = entry.key?.toLongOrNull() ?: return@mapNotNull null
+            val amount = (entry.child("amount").value as? Number)?.toLong() ?: return@mapNotNull null
+            key to TransferMark(amount, entry.child("peer").value as? String)
         }.toMap()
 
     private fun <T> observe(ref: DatabaseReference, map: (Result<DataSnapshot>) -> T): Flow<T> = callbackFlow {

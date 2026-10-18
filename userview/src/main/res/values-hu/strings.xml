@@ -44,4 +44,8 @@
     <string name="uv_vend_e51">E51: terhelés megtörtént, de a gép nem igazolta vissza a kreditet</string>
     <string name="uv_vend_e52">E52: a gép nem állt vissza készenlétbe</string>
     <string name="uv_vend_e53">E53: terhelés megtörtént, de a gép nem vette át a kreditet</string>
+    <string name="uv_event_transfer_out">Átutalás küldve</string>
+    <string name="uv_event_transfer_in">Átutalás érkezett</string>
+    <string name="uv_event_transfer_to">Átutalás neki: %1$s</string>
+    <string name="uv_event_transfer_from">Átutalás tőle: %1$s</string>
 </resources>
