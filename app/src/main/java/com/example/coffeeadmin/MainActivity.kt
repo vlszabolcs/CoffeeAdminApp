@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
+import com.example.coffee.userview.ui.UserViewDialog
 import com.example.coffeeadmin.ui.theme.CoffeeAdminTheme
 import java.text.SimpleDateFormat
 import java.util.*
@@ -807,6 +808,8 @@ fun QuickCreditDialog(
 ) {
     var amountText by remember { mutableStateOf("0") }
     var showStats by remember { mutableStateOf(false) }
+    var showUserView by remember { mutableStateOf(false) }
+    var ownerReleased by remember(user.uid) { mutableStateOf(false) }
     val logList by viewModel.logList
 
     AlertDialog(
@@ -814,9 +817,16 @@ fun QuickCreditDialog(
         title = { 
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 Text("${user.name}")
-                if (onEdit != null) {
-                    IconButton(onClick = onEdit) {
-                        Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.edit))
+                Row {
+                    if (user.uid != null) {
+                        IconButton(onClick = { showUserView = true }) {
+                            Icon(Icons.Default.Person, contentDescription = stringResource(com.example.coffee.userview.R.string.uv_open))
+                        }
+                    }
+                    if (onEdit != null) {
+                        IconButton(onClick = onEdit) {
+                            Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.edit))
+                        }
                     }
                 }
             }
@@ -824,6 +834,15 @@ fun QuickCreditDialog(
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.current_balance_format, user.creditInt))
+                if (user.owner != null && !ownerReleased) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(stringResource(R.string.owner_bound), style = MaterialTheme.typography.bodySmall)
+                        TextButton(onClick = {
+                            viewModel.releaseOwner(user)
+                            ownerReleased = true
+                        }) { Text(stringResource(R.string.owner_release)) }
+                    }
+                }
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 Row(
@@ -894,6 +913,10 @@ fun QuickCreditDialog(
             }
         }
     )
+
+    if (showUserView) {
+        user.uid?.let { uid -> UserViewDialog(cardUid = uid, onDismiss = { showUserView = false }) }
+    }
 }
 
 @Composable
