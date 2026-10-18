@@ -3,17 +3,29 @@ package com.example.coffee.userapp
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.coffee.userview.data.MachinePresence
+import com.example.coffee.userview.data.RemotePaths
+import com.example.coffee.userview.data.RemoteVendRepository
+import com.example.coffee.userview.data.UserState
+import com.example.coffee.userview.data.UserViewRepository
+import com.example.coffee.userview.data.VendProgress
 import com.google.android.gms.tasks.Task
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -41,10 +53,13 @@ enum class NfcStatus { Unknown, Missing, Disabled, Enabled }
  * Reading a card binds it to this phone (users/<UID>/owner = auth uid); the database rules then let
  * only this phone read the card and buy with it. The app never registers a user or changes credit.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class UserAppViewModel(application: Application) : AndroidViewModel(application) {
     private val auth = FirebaseAuth.getInstance()
     private val users = FirebaseDatabase.getInstance().reference.child("users")
     private val store = CardStore(application)
+    private val userRepository = UserViewRepository()
+    private val vendRepository = RemoteVendRepository(machineId = userRepository.machineId)
 
     val card: StateFlow<SavedCard?> = store.card
 
@@ -60,9 +75,21 @@ class UserAppViewModel(application: Application) : AndroidViewModel(application)
 
     val nfcStatus = MutableStateFlow(NfcStatus.Unknown)
 
-    /** NFC reading is on only while the card reading screen is shown. */
-    val scanning: StateFlow<Boolean> = combine(card, replacing, authState) { card, replacing, auth ->
-        auth == AuthState.SignedIn && (card == null || replacing)
+    private val _transfer = MutableStateFlow<TransferState?>(null)
+    val transfer: StateFlow<TransferState?> = _transfer.asStateFlow()
+    private var transferJob: Job? = null
+
+    /** Collected only after sign-in (the screens that need these exist only then). */
+    val presence: StateFlow<MachinePresence?> =
+        userRepository.observePresence().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    val credit: StateFlow<Long?> = card.flatMapLatest { saved ->
+        if (saved == null) flowOf(null)
+        else userRepository.observeUser(saved.uid).map { (it as? UserState.Ready)?.user?.credit }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** NFC reading is on only while a card is expected: card reading screen, or a transfer's recipient. */
+    val scanning: StateFlow<Boolean> = combine(card, replacing, authState, transfer) { card, replacing, auth, transfer ->
+        auth == AuthState.SignedIn && (card == null || replacing || transfer is TransferState.WaitingForCard)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     init {
@@ -114,6 +141,11 @@ class UserAppViewModel(application: Application) : AndroidViewModel(application)
 
     /** Called from the NFC reader thread. */
     fun onCardRead(uid: String) {
+        val transfer = _transfer.value
+        if (transfer is TransferState.WaitingForCard) {
+            onRecipientRead(uid, transfer.amount)
+            return
+        }
         if (!scanning.value || _scan.value == ScanState.Checking) return
         _scan.value = ScanState.Checking
         viewModelScope.launch {
@@ -129,6 +161,40 @@ class UserAppViewModel(application: Application) : AndroidViewModel(application)
             } catch (e: Exception) {
                 if (e.isPermissionDenied()) ScanState.Refused else ScanState.Failed(e.message)
             }
+        }
+    }
+
+    fun startTransfer() {
+        if (_transfer.value == null) _transfer.value = TransferState.EnterAmount
+    }
+
+    fun confirmTransferAmount(amount: Long) {
+        _transfer.value = TransferState.WaitingForCard(amount)
+    }
+
+    /** Closes the dialog; a request already sent is not withdrawn, only no longer followed. */
+    fun closeTransfer() {
+        transferJob?.cancel()
+        transferJob = null
+        _transfer.value = null
+    }
+
+    private fun onRecipientRead(uid: String, amount: Long) {
+        val sender = store.card.value ?: return
+        if (uid == sender.uid) {
+            _transfer.value = TransferState.WaitingForCard(amount, ownCard = true)
+            return
+        }
+        _transfer.value = TransferState.Sending(amount, VendProgress.Sent)
+        transferJob = viewModelScope.launch {
+            val finished = withTimeoutOrNull(RemotePaths.VEND_TIMEOUT_MS) {
+                vendRepository.requestTransfer(sender.uid, uid, amount).collect { next ->
+                    // the late local write confirmation must not hide an answer of the machine
+                    if (next != VendProgress.Sent) _transfer.value = TransferState.Sending(amount, next)
+                }
+                true
+            }
+            if (finished == null) _transfer.value = TransferState.Sending(amount, VendProgress.TimedOut)
         }
     }
 

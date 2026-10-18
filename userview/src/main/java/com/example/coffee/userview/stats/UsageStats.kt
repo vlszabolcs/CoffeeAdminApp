@@ -29,7 +29,7 @@ object UsageStats {
                     spent += e.amount
                 }
                 CreditEvent.Type.TOP_UP -> toppedUp += e.amount
-                CreditEvent.Type.INITIAL -> Unit
+                CreditEvent.Type.INITIAL, CreditEvent.Type.TRANSFER_OUT, CreditEvent.Type.TRANSFER_IN -> Unit
             }
         }
         return UsageSummary(coffees, spent, toppedUp)

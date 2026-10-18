@@ -51,10 +51,14 @@ private fun LogRow(event: CreditEvent, zone: ZoneId) {
         CreditEvent.Type.PURCHASE -> stringResource(R.string.uv_event_purchase)
         CreditEvent.Type.TOP_UP -> stringResource(R.string.uv_event_top_up)
         CreditEvent.Type.INITIAL -> stringResource(R.string.uv_event_initial)
+        CreditEvent.Type.TRANSFER_OUT -> event.peer?.takeIf { it.isNotBlank() }
+            ?.let { stringResource(R.string.uv_event_transfer_to, it) } ?: stringResource(R.string.uv_event_transfer_out)
+        CreditEvent.Type.TRANSFER_IN -> event.peer?.takeIf { it.isNotBlank() }
+            ?.let { stringResource(R.string.uv_event_transfer_from, it) } ?: stringResource(R.string.uv_event_transfer_in)
     }
     val (amountText, amountColor) = when (event.type) {
-        CreditEvent.Type.PURCHASE -> "−${event.amount} Ft" to MaterialTheme.colorScheme.error
-        CreditEvent.Type.TOP_UP -> "+${event.amount} Ft" to MaterialTheme.colorScheme.primary
+        CreditEvent.Type.PURCHASE, CreditEvent.Type.TRANSFER_OUT -> "−${event.amount} Ft" to MaterialTheme.colorScheme.error
+        CreditEvent.Type.TOP_UP, CreditEvent.Type.TRANSFER_IN -> "+${event.amount} Ft" to MaterialTheme.colorScheme.primary
         CreditEvent.Type.INITIAL -> "${event.amount} Ft" to MaterialTheme.colorScheme.onSurface
     }
     Row(

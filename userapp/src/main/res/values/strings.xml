@@ -17,4 +17,23 @@
     <string name="ua_replace_text">After you read the new card, the old one is unbound from this phone.</string>
     <string name="ua_replace_confirm">Replace</string>
     <string name="ua_cancel">Cancel</string>
+    <string name="ua_close">Close</string>
+    <string name="ua_transfer">Transfer credit</string>
+    <string name="ua_transfer_confirm">Transfer %1$d Ft</string>
+    <string name="ua_transfer_step">Whole hundreds only, at least 100 Ft</string>
+    <string name="ua_transfer_too_much">You have %1$d Ft</string>
+    <string name="ua_transfer_unsupported">The machine does not handle transfers yet</string>
+    <string name="ua_transfer_offline">The machine is not available</string>
+    <string name="ua_transfer_tap_recipient">The recipient taps their card on this phone (%1$d Ft)</string>
+    <string name="ua_transfer_own_card">This is your own card. The recipient has to tap theirs.</string>
+    <string name="ua_transfer_sending">Transferring %1$d Ft…</string>
+    <string name="ua_transfer_done">%1$d Ft transferred, you have %2$d Ft left</string>
+    <string name="ua_transfer_done_no_credit">%1$d Ft transferred</string>
+    <string name="ua_transfer_timeout">The machine did not answer. Check your log before trying again.</string>
+    <string name="ua_transfer_uncertain">The machine did not get an answer from the database. Check your log before trying again.</string>
+    <string name="ua_transfer_failed">Transfer failed: %1$s</string>
+    <string name="ua_transfer_e24">Invalid transfer</string>
+    <string name="ua_transfer_e30">The recipient\'s card is not registered</string>
+    <string name="ua_transfer_e31">Not enough credit</string>
+    <string name="ua_transfer_e33">The machine is busy, try again in a moment</string>
 </resources>

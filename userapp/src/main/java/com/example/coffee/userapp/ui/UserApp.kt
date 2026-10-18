@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Contactless
 import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -79,11 +80,26 @@ fun UserApp(viewModel: UserAppViewModel) {
                         onClose = null,
                         untitled = stringResource(R.string.app_name),
                         actions = {
+                            IconButton(onClick = viewModel::startTransfer) {
+                                Icon(Icons.Default.SwapHoriz, contentDescription = stringResource(R.string.ua_transfer))
+                            }
                             IconButton(onClick = { confirmReplace = true }) {
                                 Icon(Icons.Default.CreditCard, contentDescription = stringResource(R.string.ua_replace_card))
                             }
                         }
                     )
+                    val transfer by viewModel.transfer.collectAsState()
+                    val credit by viewModel.credit.collectAsState()
+                    val presence by viewModel.presence.collectAsState()
+                    transfer?.let { state ->
+                        TransferDialog(
+                            state = state,
+                            credit = credit,
+                            presence = presence,
+                            onConfirmAmount = viewModel::confirmTransferAmount,
+                            onClose = viewModel::closeTransfer
+                        )
+                    }
                     if (confirmReplace) {
                         AlertDialog(
                             onDismissRequest = { confirmReplace = false },

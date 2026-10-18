@@ -260,18 +260,20 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
         listen(database.child("users")) { snapshot ->
             val users = mutableListOf<User>()
             val logs = mutableMapOf<String, Map<Long, Long>>()
+            val transfers = mutableMapOf<String, Set<Long>>()
             snapshot.children.forEach { child ->
                 val uid = child.key ?: return@forEach
                 val user = child.getValue<User>()
                 if (user != null) {
                     val log = readCreditLog(child.child("log"))
                     logs[uid] = log
+                    transfers[uid] = child.child("xfer").children.mapNotNull { it.key?.toLongOrNull() }.toSet()
                     users.add(user.copy(uid = uid, lastLog = log.keys.maxOrNull() ?: 0L))
                 }
             }
             _userList.value = users
             _isLoading.value = false
-            syncLogCache(logs)
+            syncLogCache(logs, transfers)
         }
     }
 
@@ -414,14 +416,14 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
 
     // users/<UID>/log -> local Room cache (the statistics are computed from the cache).
     // Only the entries newer than the last cached one of the user are classified and written.
-    private fun syncLogCache(logs: Map<String, Map<Long, Long>>) {
+    private fun syncLogCache(logs: Map<String, Map<Long, Long>>, transfers: Map<String, Set<Long>>) {
         viewModelScope.launch {
             val latest = logDao.getLatestPerUser().associateBy { it.userId }
             val entries = logs.flatMap { (uid, log) ->
                 val last = latest[uid]
                 val newLog = if (last == null) log else log.filterKeys { it > last.timestamp }
                 if (newLog.isEmpty()) return@flatMap emptyList()
-                CreditLog.toEntries(uid, newLog, last?.remainingCredit)
+                CreditLog.toEntries(uid, newLog, last?.remainingCredit, transfers[uid].orEmpty())
             }
             if (entries.isNotEmpty()) {
                 logDao.insertLogs(entries)

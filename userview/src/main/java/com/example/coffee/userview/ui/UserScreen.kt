@@ -103,7 +103,7 @@ fun UserScreen(
 
 @Composable
 private fun UserContent(user: CardUser, config: MachineConfig, buyPanel: @Composable () -> Unit) {
-    val events = remember(user.log) { CreditHistory.classify(user.log) }
+    val events = remember(user.log, user.transfers) { CreditHistory.classify(user.log, user.transfers) }
     var tab by rememberSaveable { mutableIntStateOf(0) }
 
     Column(modifier = Modifier.fillMaxSize()) {

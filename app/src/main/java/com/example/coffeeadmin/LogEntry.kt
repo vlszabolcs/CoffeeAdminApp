@@ -46,6 +46,7 @@ data class LogEntry(
             CreditLog.ACTION_PURCHASE -> "Kávé vásárlás"
             CreditLog.ACTION_TOP_UP -> "Kredit feltöltés"
             CreditLog.ACTION_INITIAL -> "Kezdő egyenleg"
+            CreditLog.ACTION_TRANSFER -> "Átutalás"
             else -> "Egyéb művelet ($actionInt)"
         }
 
