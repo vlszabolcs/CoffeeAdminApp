@@ -35,5 +35,5 @@
     <string name="ua_transfer_e24">Invalid transfer</string>
     <string name="ua_transfer_e30">The recipient\'s card is not registered</string>
     <string name="ua_transfer_e31">Not enough credit</string>
-    <string name="ua_transfer_e33">The machine is busy, try again in a moment</string>
+    <string name="ua_transfer_e33">The machine cannot transfer right now, try again a bit later</string>
 </resources>

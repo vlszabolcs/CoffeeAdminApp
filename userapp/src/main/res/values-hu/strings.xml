@@ -35,5 +35,5 @@
     <string name="ua_transfer_e24">Érvénytelen átutalás</string>
     <string name="ua_transfer_e30">A címzett kártyája nincs regisztrálva</string>
     <string name="ua_transfer_e31">Nincs elég kredit</string>
-    <string name="ua_transfer_e33">A gép foglalt, próbáld újra egy kicsit később</string>
+    <string name="ua_transfer_e33">A gép most nem tud átutalni, próbáld újra kicsit később</string>
 </resources>

@@ -2,10 +2,10 @@ package com.example.coffee.userapp.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Contactless
@@ -32,6 +32,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import com.example.coffee.userapp.R
 import com.example.coffee.userapp.TransferRules
 import com.example.coffee.userapp.TransferState
@@ -52,6 +53,9 @@ internal fun TransferDialog(
     val running = state is TransferState.Sending && !state.progress.finished
     AlertDialog(
         onDismissRequest = { if (!running) onClose() },
+        // the platform default width wraps "+100" letter by letter on a narrow phone
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier.fillMaxWidth(0.92f),
         title = { Text(stringResource(R.string.ua_transfer)) },
         text = {
             when (state) {
@@ -72,6 +76,8 @@ internal fun TransferDialog(
         }
     )
 }
+
+private val StepButtonPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
 
 @Composable
 private fun AmountStep(credit: Long?, presence: MachinePresence?, onConfirm: (Long) -> Unit) {
@@ -94,9 +100,16 @@ private fun AmountStep(credit: Long?, presence: MachinePresence?, onConfirm: (Lo
     val valid = credit != null && TransferRules.valid(amount, credit)
 
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { text = (amount - TransferRules.STEP).coerceAtLeast(TransferRules.STEP).toString() }) {
-                Text("−${TransferRules.STEP}")
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            OutlinedButton(
+                onClick = { text = (amount - TransferRules.STEP).coerceAtLeast(TransferRules.STEP).toString() },
+                contentPadding = StepButtonPadding
+            ) {
+                Text("−${TransferRules.STEP}", maxLines = 1, softWrap = false)
             }
             OutlinedTextField(
                 value = text,
@@ -104,10 +117,13 @@ private fun AmountStep(credit: Long?, presence: MachinePresence?, onConfirm: (Lo
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
                 suffix = { Text("Ft") },
-                modifier = Modifier.width(120.dp)
+                modifier = Modifier.weight(1f)
             )
-            OutlinedButton(onClick = { text = (amount + TransferRules.STEP).toString() }) {
-                Text("+${TransferRules.STEP}")
+            OutlinedButton(
+                onClick = { text = (amount + TransferRules.STEP).toString() },
+                contentPadding = StepButtonPadding
+            ) {
+                Text("+${TransferRules.STEP}", maxLines = 1, softWrap = false)
             }
         }
         val hint = when {
