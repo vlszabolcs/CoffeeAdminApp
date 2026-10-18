@@ -8,6 +8,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.ServerValue
 import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.getValue
 
@@ -73,10 +74,21 @@ class UserViewModel : ViewModel() {
     private val _machineConfig = mutableStateOf(MachineConfig())
     val machineConfig: State<MachineConfig> = _machineConfig
 
+    private val _income = mutableStateOf(0L)
+    val income: State<Long> = _income
+
+    private val _coffeeCount = mutableStateOf(0L)
+    val coffeeCount: State<Long> = _coffeeCount
+
+    private val _lowCoffeeWarning = mutableStateOf<String?>(null)
+    val lowCoffeeWarning: State<String?> = _lowCoffeeWarning
+
     init {
         if (auth.currentUser != null) {
             fetchAllUsers()
             listenToMachineConfig()
+            listenToIncome()
+            listenToCoffeeCount()
         }
     }
 
@@ -86,6 +98,7 @@ class UserViewModel : ViewModel() {
                 val config = snapshot.getValue<MachineConfig>()
                 if (config != null) {
                     _machineConfig.value = config
+                    checkCoffeeLevel()
                 }
             }
 
@@ -93,6 +106,45 @@ class UserViewModel : ViewModel() {
                 _error.value = error.message
             }
         })
+    }
+
+    private fun listenToIncome() {
+        database.child("stat").child("income").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                _income.value = snapshot.getValue<Long>() ?: 0L
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                _error.value = error.message
+            }
+        })
+    }
+
+    private fun listenToCoffeeCount() {
+        database.child("stat").child("coffee").addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                _coffeeCount.value = snapshot.getValue<Long>() ?: 0L
+                checkCoffeeLevel()
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                _error.value = error.message
+            }
+        })
+    }
+
+    private fun checkCoffeeLevel() {
+        val threshold = _machineConfig.value.coffeeThreshold ?: 0L
+        val current = _coffeeCount.value
+        if (current < threshold) {
+            _lowCoffeeWarning.value = "Alacsony kávészint! Aktuális: $current, Küszöb: $threshold"
+        } else {
+            _lowCoffeeWarning.value = null
+        }
+    }
+
+    fun clearLowCoffeeWarning() {
+        _lowCoffeeWarning.value = null
     }
 
     fun clearSuccessMessage() {
@@ -109,6 +161,26 @@ class UserViewModel : ViewModel() {
             }
     }
 
+    fun updateIncome(value: Long) {
+        database.child("stat").child("income").setValue(value)
+            .addOnSuccessListener {
+                _successMessage.value = "Bevétel frissítve!"
+            }
+            .addOnFailureListener {
+                _error.value = "Sikertelen bevétel frissítés: ${it.message}"
+            }
+    }
+
+    fun updateCoffeeCount(value: Long) {
+        database.child("stat").child("coffee").setValue(value)
+            .addOnSuccessListener {
+                _successMessage.value = "Kávé mennyiség frissítve!"
+            }
+            .addOnFailureListener {
+                _error.value = "Sikertelen frissítés: ${it.message}"
+            }
+    }
+
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
     }
@@ -122,6 +194,8 @@ class UserViewModel : ViewModel() {
                 _isLoading.value = false
                 fetchAllUsers()
                 listenToMachineConfig()
+                listenToIncome()
+                listenToCoffeeCount()
             }
             .addOnFailureListener {
                 _error.value = it.message
@@ -202,11 +276,12 @@ class UserViewModel : ViewModel() {
         val now = System.currentTimeMillis() / 1000 // Seconds
         
         val updates = mapOf(
-            "credit" to newCredit,
-            "update" to now
+            "users/$uid/credit" to newCredit,
+            "users/$uid/update" to now,
+            "stat/income" to ServerValue.increment(amount.toLong())
         )
         
-        database.child("users").child(uid).updateChildren(updates)
+        database.updateChildren(updates)
             .addOnSuccessListener {
                 fetchAllUsers() 
                 _successMessage.value = "Kredit frissítve!"
@@ -221,14 +296,25 @@ class UserViewModel : ViewModel() {
         _isLoading.value = true
         val now = System.currentTimeMillis() / 1000 // Seconds
         
-        val userMap = mapOf(
-            "name" to updatedUser.name,
-            "credit" to updatedUser.creditInt,
-            "loan" to updatedUser.loanInt,
-            "update" to now
-        )
+        val oldUser = _userList.value.find { it.uid == uid }
+        val creditDiff = if (oldUser != null) {
+            updatedUser.creditLong - oldUser.creditLong
+        } else {
+            updatedUser.creditLong
+        }
 
-        database.child("users").child(uid).updateChildren(userMap)
+        val updates = mutableMapOf<String, Any?>(
+            "users/$uid/name" to updatedUser.name,
+            "users/$uid/credit" to updatedUser.creditLong,
+            "users/$uid/loan" to updatedUser.loanLong,
+            "users/$uid/update" to now
+        )
+        
+        if (creditDiff != 0L) {
+            updates["stat/income"] = ServerValue.increment(creditDiff)
+        }
+
+        database.updateChildren(updates)
             .addOnSuccessListener {
                 _isLoading.value = false
                 fetchAllUsers()
