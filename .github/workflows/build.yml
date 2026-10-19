@@ -1,0 +1,41 @@
+name: Build APKs
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APKs (admin app + user app)
+        run: ./gradlew --no-configuration-cache :app:assembleDebug :userapp:assembleDebug
+
+      - name: Upload admin app APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: CoffeeAdmin-debug-${{ github.sha }}
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Upload user app APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: CoffeeApp-debug-${{ github.sha }}
+          path: userapp/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
