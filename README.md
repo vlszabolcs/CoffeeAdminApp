@@ -34,3 +34,7 @@ A separate app for coffee drinkers, built from the same repository: `./gradlew :
 - It signs in with Firebase **Anonymous** auth (enable it in the console), so under the database rules it can read only its own card, `conf` and `remote/...`.
 - The screen is the `userview` module's `UserScreen`: credit, log, statistics and "Kávét kérek" (virtual card tap on machine `machine1`).
 - Package `com.example.coffeeui`, registered in the TEST project (`userapp/google-services.json`). For production, add this package to `coffeegg-a4840` and replace the file.
+
+## Firebase projects
+
+- `app/google-services.json` is the production project `coffeegg-a4840`; `app/google-servicesTEST.json` is the test project `espresso-1d82f`. To build the admin app against the test project, copy the TEST file over `google-services.json`.
