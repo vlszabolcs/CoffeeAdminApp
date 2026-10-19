@@ -10,7 +10,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        // registered in the TEST Firebase project (espresso-1d82f), see userapp/google-services.json
+        // registered in the production Firebase project (coffeegg-a4840), see userapp/google-services.json
         applicationId = "com.example.coffeeui"
         minSdk = 26
         targetSdk = 35

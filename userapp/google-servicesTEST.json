@@ -1,0 +1,68 @@
+{
+  "project_info": {
+    "project_number": "461656468814",
+    "firebase_url": "https://espresso-1d82f-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "espresso-1d82f",
+    "storage_bucket": "espresso-1d82f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:461656468814:android:9f78edb701f763e7b5821f",
+        "android_client_info": {
+          "package_name": "com.example.coffeeadmin"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAes-5Kv9bDoX-Q7ZZ7Tvn9eXyLhhcZPrM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:461656468814:android:b04b5f302003ec90b5821f",
+        "android_client_info": {
+          "package_name": "com.example.coffeeui"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAes-5Kv9bDoX-Q7ZZ7Tvn9eXyLhhcZPrM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:461656468814:android:76bbefb7bbdd9d35b5821f",
+        "android_client_info": {
+          "package_name": "com.github.muellerma.nfcreader"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAes-5Kv9bDoX-Q7ZZ7Tvn9eXyLhhcZPrM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
