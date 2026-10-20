@@ -33,4 +33,8 @@ A separate app for coffee drinkers, built from the same repository: `./gradlew :
 - **Átutalás (credit transfer):** amount in whole hundreds, confirm, then the recipient taps their card on the phone. The app sends `remote/<dev>/req/<id> = {cardUid, ts, to, amount}`; the machine moves the credit and writes both cards (credit, log, `xfer/<key>` marker), see the brewpass README "Credit transfer". Offered only when `remote/<dev>/online.transfer` is true. The log shows transfers separately and the admin statistics do not count them as coffees.
 - It signs in with Firebase **Anonymous** auth (enable it in the console), so under the database rules it can read only its own card, `conf` and `remote/...`.
 - The screen is the `userview` module's `UserScreen`: credit, log, statistics and "Kávét kérek" (virtual card tap on machine `machine1`).
-- Package `com.example.coffeeui`, registered in the TEST project (`userapp/google-services.json`). For production, add this package to `coffeegg-a4840` and replace the file.
+- Package `com.example.coffeeui`, registered in both Firebase projects (see below).
+
+## Firebase projects
+
+- `app/google-services.json` and `userapp/google-services.json` are the production project `coffeegg-a4840`; the `google-servicesTEST.json` next to them is the test project `espresso-1d82f`. To build an app against the test project, copy its TEST file over `google-services.json`.
