@@ -18,9 +18,24 @@ android {
         versionName = "1.0"
     }
 
+    // Release signing comes from the environment (GitHub secrets in the release workflow).
+    // Without it the release APK is signed with the debug key so it still installs.
+    val releaseKeystore = System.getenv("USERAPP_KEYSTORE_FILE")
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = System.getenv("USERAPP_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("USERAPP_KEY_ALIAS")
+                keyPassword = System.getenv("USERAPP_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName(if (releaseKeystore != null) "release" else "debug")
         }
     }
     compileOptions {
