@@ -23,8 +23,8 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Build debug APKs (admin app + user app)
-        run: ./gradlew --no-configuration-cache :app:assembleDebug :userapp:assembleDebug
+      - name: Build debug APKs (admin app + user app) and the user app release APK
+        run: ./gradlew --no-configuration-cache :app:assembleDebug :userapp:assembleDebug :userapp:assembleRelease
 
       - name: Upload admin app APK
         uses: actions/upload-artifact@v4
