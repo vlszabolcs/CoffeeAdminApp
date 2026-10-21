@@ -43,13 +43,15 @@ sealed interface ScanState {
     data object Refused : ScanState
     /** The saved card could not be claimed again at start (bound to another phone or deleted). */
     data object Lost : ScanState
+    /** The pairing code does not exist, has expired or was already used. */
+    data object BadCode : ScanState
     data class Failed(val message: String?) : ScanState
 }
 
 enum class NfcStatus { Unknown, Missing, Disabled, Enabled }
 
 /**
- * The standalone user app: anonymous sign-in, one saved card read by NFC.
+ * The standalone user app: anonymous sign-in, one saved card read by NFC or got with a pairing code.
  * Reading a card binds it to this phone (users/<UID>/owner = auth uid); the database rules then let
  * only this phone read the card and buy with it. The app never registers a user or changes credit.
  */
@@ -57,6 +59,7 @@ enum class NfcStatus { Unknown, Missing, Disabled, Enabled }
 class UserAppViewModel(application: Application) : AndroidViewModel(application) {
     private val auth = FirebaseAuth.getInstance()
     private val users = FirebaseDatabase.getInstance().reference.child("users")
+    private val pairs = FirebaseDatabase.getInstance().reference.child(PairCode.PATH)
     private val store = CardStore(application)
     private val userRepository = UserViewRepository()
     private val vendRepository = RemoteVendRepository(machineId = userRepository.machineId)
@@ -150,18 +153,56 @@ class UserAppViewModel(application: Application) : AndroidViewModel(application)
         _scan.value = ScanState.Checking
         viewModelScope.launch {
             _scan.value = try {
-                claim(uid)
-                val name = users.child(uid).child("name").get().await().value as? String
-                val old = store.card.value
-                store.save(SavedCard(uid, name))
-                _replacing.value = false
-                // the old card is free again for whoever reads it next; best effort
-                if (old != null && old.uid != uid) users.child(old.uid).child("owner").removeValue()
+                bind(uid)
                 ScanState.Waiting
             } catch (e: Exception) {
                 if (e.isPermissionDenied()) ScanState.Refused else ScanState.Failed(e.message)
             }
         }
+    }
+
+    /**
+     * Gets the card from a pairing code made by the admin (pair/<code> = {card, exp}): for a virtual card,
+     * or when the card is not at hand. The card UID is only stored, never shown. The code is single use.
+     */
+    fun pairWithCode(code: String) {
+        val onScanScreen = _auth.value == AuthState.SignedIn && (store.card.value == null || _replacing.value)
+        if (!onScanScreen || _scan.value == ScanState.Checking) return
+        if (!PairCode.valid(code)) {
+            _scan.value = ScanState.BadCode
+            return
+        }
+        _scan.value = ScanState.Checking
+        viewModelScope.launch {
+            _scan.value = try {
+                // the rules let anyone signed in read one code while it is valid, but not list the codes
+                val uid = try {
+                    pairs.child(code).child("card").get().await().value as? String
+                } catch (e: Exception) {
+                    if (e.isPermissionDenied()) null else throw e
+                }
+                if (uid == null) {
+                    ScanState.BadCode
+                } else {
+                    bind(uid)
+                    pairs.child(code).removeValue()
+                    ScanState.Waiting
+                }
+            } catch (e: Exception) {
+                if (e.isPermissionDenied()) ScanState.Refused else ScanState.Failed(e.message)
+            }
+        }
+    }
+
+    /** Claims [uid] and saves it as the card of this phone; the previous card is released. */
+    private suspend fun bind(uid: String) {
+        claim(uid)
+        val name = users.child(uid).child("name").get().await().value as? String
+        val old = store.card.value
+        store.save(SavedCard(uid, name))
+        _replacing.value = false
+        // the old card is free again for whoever reads it next; best effort
+        if (old != null && old.uid != uid) users.child(old.uid).child("owner").removeValue()
     }
 
     fun startTransfer() {

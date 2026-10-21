@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Contactless
 import androidx.compose.material.icons.filled.CreditCard
@@ -20,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -35,15 +37,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.coffee.userapp.AuthState
 import com.example.coffee.userapp.NfcStatus
+import com.example.coffee.userapp.PairCode
 import com.example.coffee.userapp.R
 import com.example.coffee.userapp.SavedCard
 import com.example.coffee.userapp.ScanState
 import com.example.coffee.userapp.UserAppViewModel
 import com.example.coffee.userview.ui.UserScreen
+import com.example.coffee.userview.update.UpdateNotice
 
 @Composable
 fun UserApp(viewModel: UserAppViewModel) {
@@ -71,7 +76,8 @@ fun UserApp(viewModel: UserAppViewModel) {
                         scan = scan,
                         nfc = nfc,
                         onCancel = if (saved != null) viewModel::cancelReplace else null,
-                        onDismissMessage = viewModel::dismissScanMessage
+                        onDismissMessage = viewModel::dismissScanMessage,
+                        onPairCode = viewModel::pairWithCode
                     )
                 } else {
                     var confirmReplace by remember { mutableStateOf(false) }
@@ -119,6 +125,7 @@ fun UserApp(viewModel: UserAppViewModel) {
                 }
             }
         }
+        UpdateNotice(tagPrefix = "userapp-v")
     }
 }
 
@@ -129,9 +136,11 @@ private fun ScanScreen(
     scan: ScanState,
     nfc: NfcStatus,
     onCancel: (() -> Unit)?,
-    onDismissMessage: () -> Unit
+    onDismissMessage: () -> Unit,
+    onPairCode: (String) -> Unit
 ) {
     val context = LocalContext.current
+    var enterCode by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
             TopAppBar(title = {
@@ -163,9 +172,15 @@ private fun ScanScreen(
                         CircularProgressIndicator()
                         CenteredText(stringResource(R.string.ua_checking))
                     }
-                    ScanState.Refused, ScanState.Lost -> {
+                    ScanState.Refused, ScanState.Lost, ScanState.BadCode -> {
                         CenteredText(
-                            stringResource(if (scan == ScanState.Lost) R.string.ua_card_lost else R.string.ua_refused)
+                            stringResource(
+                                when (scan) {
+                                    ScanState.Lost -> R.string.ua_card_lost
+                                    ScanState.BadCode -> R.string.ua_pair_bad_code
+                                    else -> R.string.ua_refused
+                                }
+                            )
                         )
                         OutlinedButton(onClick = onDismissMessage) { Text(stringResource(R.string.ua_try_again)) }
                     }
@@ -179,11 +194,54 @@ private fun ScanScreen(
                     }
                 }
             }
+            // the code works without NFC too: virtual cards, or when the card is not at hand
+            if (scan != ScanState.Checking) {
+                TextButton(onClick = { enterCode = true }) { Text(stringResource(R.string.ua_pair_enter)) }
+            }
             if (onCancel != null) {
                 TextButton(onClick = onCancel) { Text(stringResource(R.string.ua_cancel)) }
             }
         }
     }
+
+    if (enterCode) {
+        PairCodeDialog(
+            onDismiss = { enterCode = false },
+            onConfirm = { code ->
+                enterCode = false
+                onPairCode(code)
+            }
+        )
+    }
+}
+
+@Composable
+private fun PairCodeDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    var code by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.ua_pair_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.ua_pair_text))
+                OutlinedTextField(
+                    value = code,
+                    onValueChange = { value -> code = value.filter { it.isDigit() }.take(PairCode.LENGTH) },
+                    label = { Text(stringResource(R.string.ua_pair_code)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    singleLine = true
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(code) }, enabled = PairCode.valid(code)) {
+                Text(stringResource(R.string.ua_pair_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.ua_cancel)) }
+        }
+    )
 }
 
 @Composable

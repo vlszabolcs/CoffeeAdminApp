@@ -48,4 +48,8 @@
     <string name="uv_event_transfer_in">Transfer received</string>
     <string name="uv_event_transfer_to">Transfer to %1$s</string>
     <string name="uv_event_transfer_from">Transfer from %1$s</string>
+    <string name="uv_update_title">New version available</string>
+    <string name="uv_update_text">Version %1$s can be downloaded (installed: %2$s). After downloading, open the APK to install it.</string>
+    <string name="uv_update_download">Download</string>
+    <string name="uv_update_later">Later</string>
 </resources>

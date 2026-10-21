@@ -36,4 +36,10 @@
     <string name="ua_transfer_e30">A címzett kártyája nincs regisztrálva</string>
     <string name="ua_transfer_e31">Nincs elég kredit</string>
     <string name="ua_transfer_e33">A gép most nem tud átutalni, próbáld újra kicsit később</string>
+    <string name="ua_pair_enter">Párosító kódom van</string>
+    <string name="ua_pair_title">Párosító kód</string>
+    <string name="ua_pair_text">Írd be az adminisztrátortól kapott 8 jegyű kódot. A kód 10 percig érvényes, és egyszer használható.</string>
+    <string name="ua_pair_code">Kód</string>
+    <string name="ua_pair_confirm">Párosítás</string>
+    <string name="ua_pair_bad_code">A kód hibás, lejárt vagy már felhasználták. Kérj újat az adminisztrátortól.</string>
 </resources>
