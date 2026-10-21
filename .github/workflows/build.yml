@@ -23,8 +23,9 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      # four APKs are packaged in parallel: the 2 GB daemon of gradle.properties ran out once (packageDebug)
       - name: Build debug and release APKs of both apps, run the unit tests
-        run: ./gradlew --no-configuration-cache :app:assembleDebug :userapp:assembleDebug :userapp:assembleRelease :app:assembleRelease :app:testDebugUnitTest :userapp:testDebugUnitTest :userview:testDebugUnitTest
+        run: ./gradlew --no-configuration-cache "-Dorg.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8" :app:assembleDebug :userapp:assembleDebug :userapp:assembleRelease :app:assembleRelease :app:testDebugUnitTest :userapp:testDebugUnitTest :userview:testDebugUnitTest
 
       - name: Upload admin app APK
         uses: actions/upload-artifact@v4
