@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
 import com.example.coffee.userview.ui.UserViewDialog
+import com.example.coffee.userview.update.UpdateNotice
 import com.example.coffeeadmin.ui.theme.CoffeeAdminTheme
 import java.text.SimpleDateFormat
 import java.util.*
@@ -156,6 +157,8 @@ fun MainScreen(viewModel: UserViewModel) {
                 1 -> MachineScreen(viewModel)
                 2 -> LogScreen(viewModel)
             }
+
+            UpdateNotice(tagPrefix = "adminapp-v")
 
             // Low Coffee Popup
             lowCoffeeWarning?.let { message ->
@@ -350,6 +353,7 @@ fun UserListScreen(viewModel: UserViewModel) {
         UserDetailDialog(
             user = User(),
             isNewUser = true,
+            existingUids = viewModel.userList.value.map { it.uid }.toSet(),
             onDismiss = { showAddUserDialog = false },
             onSave = { newUser ->
                 viewModel.updateUser(newUser)
@@ -377,6 +381,9 @@ fun UserRow(user: User, coffeeCount: Int, onClick: () -> Unit) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = user.name ?: stringResource(R.string.unknown), style = MaterialTheme.typography.titleMedium)
                 Text(text = stringResource(R.string.balance_format, user.creditInt), style = MaterialTheme.typography.bodyMedium)
+                if (VirtualCard.isVirtual(user.uid)) {
+                    Text(text = stringResource(R.string.virtual_card), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+                }
                 if (user.loanInt > 0) {
                     Text(text = stringResource(R.string.loan_format, user.loanInt), color = Color.Red, style = MaterialTheme.typography.bodySmall)
                 }
@@ -396,7 +403,8 @@ fun UserDetailDialog(
     isNewUser: Boolean = false,
     onDismiss: () -> Unit,
     onSave: (User) -> Unit,
-    onDelete: (() -> Unit)? = null
+    onDelete: (() -> Unit)? = null,
+    existingUids: Set<String?> = emptySet()
 ) {
     var uid by remember { mutableStateOf(user.uid ?: "") }
     var name by remember { mutableStateOf(user.name ?: "") }
@@ -412,9 +420,17 @@ fun UserDetailDialog(
                 TextField(
                     value = uid, 
                     onValueChange = { uid = it }, 
-                    label = { Text(stringResource(R.string.card_uid)) }, 
+                    label = { Text(stringResource(if (VirtualCard.isVirtual(uid)) R.string.virtual_card else R.string.card_uid)) },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = true
+                    enabled = true,
+                    trailingIcon = if (isNewUser) {
+                        {
+                            // virtual card: only the admin creates one, its UID is generated here
+                            IconButton(onClick = { uid = VirtualCard.generate(existingUids) }) {
+                                Icon(Icons.Default.Smartphone, contentDescription = stringResource(R.string.generate_virtual_uid))
+                            }
+                        }
+                    } else null
                 )
                 TextField(value = name, onValueChange = { name = it }, label = { Text(stringResource(R.string.name)) }, modifier = Modifier.fillMaxWidth())
                 TextField(
@@ -810,6 +826,7 @@ fun QuickCreditDialog(
     var showStats by remember { mutableStateOf(false) }
     var showUserView by remember { mutableStateOf(false) }
     var ownerReleased by remember(user.uid) { mutableStateOf(false) }
+    var pairCode by remember(user.uid) { mutableStateOf<Pair<String, Long>?>(null) }
     val logList by viewModel.logList
 
     AlertDialog(
@@ -841,6 +858,18 @@ fun QuickCreditDialog(
                             viewModel.releaseOwner(user)
                             ownerReleased = true
                         }) { Text(stringResource(R.string.owner_release)) }
+                    }
+                }
+                if (user.uid != null) {
+                    TextButton(onClick = {
+                        viewModel.createPairCode(user) { code, expiresAt ->
+                            ownerReleased = true
+                            pairCode = code to expiresAt
+                        }
+                    }) {
+                        Icon(Icons.Default.Key, contentDescription = null)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(stringResource(R.string.pair_code_button))
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
@@ -916,6 +945,28 @@ fun QuickCreditDialog(
 
     if (showUserView) {
         user.uid?.let { uid -> UserViewDialog(cardUid = uid, onDismiss = { showUserView = false }) }
+    }
+
+    pairCode?.let { (code, expiresAt) ->
+        val until = remember(expiresAt) { SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(expiresAt)) }
+        AlertDialog(
+            onDismissRequest = { pairCode = null },
+            title = { Text(stringResource(R.string.pair_code_title)) },
+            text = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = code.chunked(4).joinToString(" "),
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(stringResource(R.string.pair_code_text, until), style = MaterialTheme.typography.bodyMedium)
+                }
+            },
+            confirmButton = {
+                Button(onClick = { pairCode = null }) { Text(stringResource(R.string.ok)) }
+            }
+        )
     }
 }
 

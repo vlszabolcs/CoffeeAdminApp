@@ -71,4 +71,10 @@
     <string name="owner_bound">Bound to a phone</string>
     <string name="owner_release">Release phone</string>
     <string name="success_owner_released">Phone released, the card can be read in again</string>
+    <string name="virtual_card">Virtual card</string>
+    <string name="generate_virtual_uid">Create a virtual card (generated UID)</string>
+    <string name="pair_code_button">Pairing code</string>
+    <string name="pair_code_title">Pairing code</string>
+    <string name="pair_code_text">Enter this code in the user app ("I have a pairing code"). Valid until %1$s, single use. The phone the card was bound to so far has been released.</string>
+    <string name="error_pair_code_format">Could not create the pairing code: %1$s</string>
 </resources>

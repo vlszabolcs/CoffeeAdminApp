@@ -603,6 +603,34 @@ class UserViewModel(application: Application) : AndroidViewModel(application) {
             .addOnFailureListener { _error.value = context.getString(R.string.error_save_format, it.message ?: "") }
     }
 
+    /**
+     * Makes a one-time pairing code for the card (pair/<code> = {card, exp}) and releases its phone in the
+     * same update, so the user app that enters the code can bind it. Expired codes are removed meanwhile.
+     */
+    fun createPairCode(user: User, onCreated: (code: String, expiresAt: Long) -> Unit) {
+        val uid = user.uid ?: return
+        val onFailure: (String?) -> Unit = { _error.value = context.getString(R.string.error_pair_code_format, it ?: "") }
+        database.child(PairCode.PATH).get()
+            .addOnSuccessListener { snapshot ->
+                val now = System.currentTimeMillis()
+                val existing = snapshot.children.map { it.key }.toSet()
+                val code = PairCode.generate(existing)
+                val expiresAt = now + PairCode.VALID_MS
+                val updates = mutableMapOf<String, Any?>(
+                    "${PairCode.PATH}/$code" to mapOf("card" to uid, "exp" to expiresAt),
+                    "users/$uid/owner" to null
+                )
+                snapshot.children.forEach { child ->
+                    val exp = (child.child("exp").value as? Number)?.toLong() ?: 0L
+                    if (exp < now) updates["${PairCode.PATH}/${child.key}"] = null
+                }
+                database.updateChildren(updates)
+                    .addOnSuccessListener { onCreated(code, expiresAt) }
+                    .addOnFailureListener { onFailure(it.message) }
+            }
+            .addOnFailureListener { onFailure(it.message) }
+    }
+
     fun deleteUser(user: User) {
         val uid = user.uid ?: return
         _isLoading.value = true

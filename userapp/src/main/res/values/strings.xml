@@ -36,4 +36,10 @@
     <string name="ua_transfer_e30">The recipient\'s card is not registered</string>
     <string name="ua_transfer_e31">Not enough credit</string>
     <string name="ua_transfer_e33">The machine cannot transfer right now, try again a bit later</string>
+    <string name="ua_pair_enter">I have a pairing code</string>
+    <string name="ua_pair_title">Pairing code</string>
+    <string name="ua_pair_text">Enter the 8-digit code you got from the administrator. The code is valid for 10 minutes and works once.</string>
+    <string name="ua_pair_code">Code</string>
+    <string name="ua_pair_confirm">Pair</string>
+    <string name="ua_pair_bad_code">The code is wrong, has expired or was already used. Ask the administrator for a new one.</string>
 </resources>

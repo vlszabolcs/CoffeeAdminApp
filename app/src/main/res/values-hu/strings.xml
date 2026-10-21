@@ -71,4 +71,10 @@
     <string name="owner_bound">Telefonhoz kötve</string>
     <string name="owner_release">Telefon leválasztása</string>
     <string name="success_owner_released">Telefon leválasztva, a kártya újra beolvasható</string>
+    <string name="virtual_card">Virtuális kártya</string>
+    <string name="generate_virtual_uid">Virtuális kártya létrehozása (generált UID)</string>
+    <string name="pair_code_button">Párosító kód</string>
+    <string name="pair_code_title">Párosító kód</string>
+    <string name="pair_code_text">Ezt a kódot kell beírni a felhasználói appban ("Párosító kódom van"). %1$s-ig érvényes, egyszer használható. Az eddigi telefon leválasztva.</string>
+    <string name="error_pair_code_format">Nem sikerült párosító kódot készíteni: %1$s</string>
 </resources>

@@ -48,4 +48,8 @@
     <string name="uv_event_transfer_in">Átutalás érkezett</string>
     <string name="uv_event_transfer_to">Átutalás neki: %1$s</string>
     <string name="uv_event_transfer_from">Átutalás tőle: %1$s</string>
+    <string name="uv_update_title">Új verzió érhető el</string>
+    <string name="uv_update_text">Letölthető a %1$s verzió (telepítve: %2$s). Letöltés után nyisd meg az APK-t a telepítéshez.</string>
+    <string name="uv_update_download">Letöltés</string>
+    <string name="uv_update_later">Később</string>
 </resources>
