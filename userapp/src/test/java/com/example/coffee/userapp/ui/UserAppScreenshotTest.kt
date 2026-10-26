@@ -53,33 +53,29 @@ class UserAppScreenshotTest {
     private fun sampleUser(): CardUser {
         val zone = ZoneId.systemDefault()
         val today = LocalDate.now(zone)
-        val log = sortedMapOf<Long, Long>()
-        val transfers = mutableMapOf<Long, TransferMark>()
-        var credit = 3000L
+        // (epoch seconds, change in Ft, transfer mark) - collected first, then applied in time order
+        val changes = mutableListOf<Triple<Long, Long, TransferMark?>>()
         var day = today.minusDays(42)
-        log[day.atTime(8, 5).atZone(zone).toEpochSecond()] = credit
         var n = 0
         while (!day.isAfter(today)) {
-            if (day == today.minusDays(20)) {
-                credit += 2000
-                log[day.atTime(12, 30).atZone(zone).toEpochSecond()] = credit
-            }
-            if (day == today.minusDays(3)) {
-                credit -= 500
-                val key = day.atTime(16, 10).atZone(zone).toEpochSecond()
-                log[key] = credit
-                transfers[key] = TransferMark(amount = -500, peer = "Bence")
-            }
+            val at = { h: Int, m: Int -> day.atTime(h, m).atZone(zone).toEpochSecond() }
+            if (day == today.minusDays(20)) changes += Triple(at(12, 30), 3000L, null)
+            if (day == today.minusDays(3)) changes += Triple(at(16, 10), -500L, TransferMark(amount = -500, peer = "Bence"))
             if (day.dayOfWeek.value <= 5) {
-                val cups = if (n % 3 == 0) 2 else 1
-                repeat(cups) { i ->
-                    credit -= price
-                    val time = if (i == 0) day.atTime(7, 40 + (n % 15)) else day.atTime(13, 15 + (n % 20))
-                    log[time.atZone(zone).toEpochSecond()] = credit
-                }
+                changes += Triple(at(7, 40 + (n % 15)), -price, null)
+                if (n % 3 == 0) changes += Triple(at(13, 15 + (n % 20)), -price, null)
                 n++
             }
             day = day.plusDays(1)
+        }
+        val log = sortedMapOf<Long, Long>()
+        val transfers = mutableMapOf<Long, TransferMark>()
+        var credit = 4000L
+        log[today.minusDays(43).atTime(9, 0).atZone(zone).toEpochSecond()] = credit
+        for ((ts, delta, mark) in changes.sortedBy { it.first }) {
+            credit += delta
+            log[ts] = credit
+            if (mark != null) transfers[ts] = mark
         }
         return CardUser(uid = cardUid, name = "Anna", credit = credit, log = log, transfers = transfers)
     }
