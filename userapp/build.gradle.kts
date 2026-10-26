@@ -69,3 +69,31 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     testImplementation(libs.junit)
 }
+
+// ---- Screenshot tests (branch "screenshots") ----------------------------------------------
+// Rendered on the JVM with Robolectric + Roborazzi, with sample data only (no Firebase).
+// Normal builds skip them; run with: ./gradlew -Pscreenshots :<module>:testDebugUnitTest
+android {
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
+}
+tasks.withType<Test>().configureEach {
+    if (project.hasProperty("screenshots")) {
+        systemProperty("roborazzi.test.record", "true")
+        filter { includeTestsMatching("*ScreenshotTest") }
+    } else {
+        exclude("**/*ScreenshotTest*")
+    }
+}
+dependencies {
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.+")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.+")
+    testImplementation("io.mockk:mockk:1.13.13")
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
+}
